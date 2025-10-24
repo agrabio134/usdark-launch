@@ -1059,6 +1059,8 @@ const handleLaunchToken = async () => {
                     height: 100%;
                     box-sizing: border-box;
                 }
+                .wallet-adapter-button-trigger{
+                    background-color: #00000015 !important;}
 
                 .sidebar button {
                     display: block;
@@ -1162,13 +1164,13 @@ const handleLaunchToken = async () => {
 
                 .token-grid {
                     display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
                     gap: 20px;
                 }
 
                 .token-card {
                     background-color: #222;
-                    padding: 15px;
+                    padding: 10px;
                     border-radius: 5px;
                     text-align: center;
                     position: relative;
@@ -1209,39 +1211,39 @@ const handleLaunchToken = async () => {
 
                 .token-card h3 {
                     margin: 10px 0 5px 0;
-                    font-size: 1.2em;
+                    font-size: 1.1em;
                 }
 
                 .token-card p {
-                    font-size: 0.9em;
+                    font-size: 0.85em;
                     color: #ccc;
                     margin: 5px 0;
                 }
 
                 .mint-address {
-                    font-size: 0.8em;
+                    font-size: 0.75em;
                     color: #888;
                     font-family: monospace;
                 }
 
                 .bonding-info {
                     background-color: rgba(28, 194, 154, 0.1);
-                    padding: 10px;
+                    padding: 8px;
                     border-radius: 5px;
-                    margin: 10px 0;
+                    margin: 8px 0;
                     border: 1px solid rgba(28, 194, 154, 0.2);
                 }
 
                 .bonding-info div {
                     color: #1cc29a;
-                    font-size: 0.85em;
-                    margin: 3px 0;
+                    font-size: 0.8em;
+                    margin: 2px 0;
                 }
 
                 .token-stats {
                     display: flex;
                     justify-content: space-between;
-                    margin: 10px 0;
+                    margin: 8px 0;
                 }
 
                 .token-stats div {
@@ -1249,7 +1251,7 @@ const handleLaunchToken = async () => {
                 }
 
                 .token-stats > div > div:first-child {
-                    font-size: 0.8em;
+                    font-size: 0.75em;
                     color: #888;
                 }
 
@@ -1260,17 +1262,17 @@ const handleLaunchToken = async () => {
 
                 .token-metrics {
                     background-color: #1a1a1a;
-                    padding: 10px;
+                    padding: 8px;
                     border-radius: 5px;
-                    margin: 10px 0;
+                    margin: 8px 0;
                     border: 1px solid #333;
                 }
 
                 .metric-row {
                     display: flex;
                     justify-content: space-between;
-                    padding: 4px 0;
-                    font-size: 0.85em;
+                    padding: 2px 0;
+                    font-size: 0.8em;
                 }
 
                 .metric-row span:first-child {
@@ -1284,15 +1286,15 @@ const handleLaunchToken = async () => {
 
                 .token-image {
                     width: 100%;
-                    height: 150px;
+                    height: 120px;
                     object-fit: cover;
                     border-radius: 5px;
                 }
 
                 .progress-bar {
                     background-color: #333;
-                    height: 8px;
-                    margin: 10px 0;
+                    height: 6px;
+                    margin: 8px 0;
                     border-radius: 5px;
                     overflow: hidden;
                 }
@@ -1307,13 +1309,14 @@ const handleLaunchToken = async () => {
                 .buy-button {
                     background-color: #1cc29a;
                     color: #000;
-                    padding: 10px 15px;
+                    padding: 8px 12px;
                     border: none;
                     border-radius: 5px;
                     cursor: pointer;
                     width: 100%;
                     font-weight: bold;
                     margin-top: 5px;
+                    font-size: 0.9em;
                 }
 
                 .buy-button.graduated {
