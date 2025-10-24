@@ -1,0 +1,329 @@
+/* Plain CSS for USDARK theme: Black and white, accent #1cc29a */
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: #000;
+    color: #fff;
+}
+
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    background-color: #111;
+    border-bottom: 1px solid #333;
+    z-index: 1000;
+    box-sizing: border-box;
+}
+
+.logo {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #fff;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.wallet {
+    /* Wallet button styled by adapter */
+}
+
+.app-container {
+    display: flex;
+    height: calc(100vh - 60px);
+    width: 100vw;
+    margin-top: 60px;
+}
+
+.sidebar {
+    width: 200px;
+    background-color: #111;
+    padding: 20px;
+    border-right: 1px solid #333;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.sidebar button {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: none;
+    border: none;
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+    font-size: 1.1em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar button.active {
+    color: #1cc29a;
+    border-left: 3px solid #1cc29a;
+    padding-left: 7px;
+}
+
+.main-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.create-coin {
+    background-color: #1cc29a;
+    color: #000;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.home-page {
+    color: #fff;
+}
+
+.trending-bar {
+    background-color: #222;
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+}
+
+.filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.filters button {
+    background-color: #222;
+    color: #fff;
+    padding: 5px 10px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.search-input {
+    flex: 1;
+    background-color: #222;
+    color: #fff;
+    border: none;
+    padding: 10px;
+    border-radius: 5px;
+    min-width: 200px;
+}
+
+.search-button {
+    background-color: #1cc29a;
+    color: #000;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.token-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.token-card {
+    background-color: #222;
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.token-image {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 5px;
+}
+
+.progress-bar {
+    background-color: #333;
+    height: 5px;
+    margin: 10px 0;
+    border-radius: 5px;
+}
+
+.progress {
+    background-color: #1cc29a;
+    height: 100%;
+    border-radius: 5px;
+}
+
+.buy-button {
+    background-color: #1cc29a;
+    color: #000;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    width: 100%;
+}
+
+.launch-page {
+    color: #fff;
+    max-width: 600px;
+}
+
+.launch-page h1 {
+    margin-bottom: 20px;
+}
+
+.launch-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #ccc;
+    font-weight: bold;
+}
+
+.input-group input,
+.input-group textarea,
+.input-group select {
+    width: 100%;
+    background-color: #222;
+    color: #fff;
+    border: 1px solid #333;
+    padding: 10px;
+    border-radius: 5px;
+    box-sizing: border-box;
+}
+
+.input-group textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.input-group p {
+    color: #888;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+.preview-media {
+    width: 100%;
+    max-width: 300px;
+    margin-top: 10px;
+    border-radius: 5px;
+}
+
+.checkbox {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
+.checkbox input {
+    margin-right: 0;
+    width: auto;
+}
+
+.recipients {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #222;
+    border-radius: 5px;
+}
+
+.recipient-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.recipient-row input {
+    flex: 1;
+}
+
+.recipients button {
+    background-color: #1cc29a;
+    color: #000;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.launch-button {
+    background-color: #1cc29a;
+    color: #000;
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-top: 10px;
+}
+
+.launch-button:disabled {
+    background-color: #333;
+    color: #666;
+    cursor: not-allowed;
+}
+
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 10px;
+    text-align: center;
+    background-color: #222;
+    color: #fff;
+    border-top: 1px solid #333;
+    z-index: 1000;
+}
+
+.status-bar.success {
+    background-color: #1cc29a;
+    color: #000;
+}
+
+.status-bar.error {
+    background-color: #ff0000;
+    color: #fff;
+}
+
+.wallet-adapter-button-trigger{
+    background-color: #1cc29a !important;
+
+}
