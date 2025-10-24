@@ -16,7 +16,7 @@ import {
 } from '@solana/spl-token';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Home, Rocket, TrendingUp, Search } from 'lucide-react';
+import { Home, Rocket, TrendingUp, Search, Menu, X } from 'lucide-react';
 import axios from 'axios';
 import '@solana/wallet-adapter-react-ui/styles.css';
 import { initializeApp } from 'firebase/app';
@@ -324,6 +324,7 @@ function App() {
     const [createdTokens, setCreatedTokens] = useState([]);
     const [isLoadingTokens, setIsLoadingTokens] = useState(true);
     const [firebaseUser, setFirebaseUser] = useState(null);
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
 
     // Launch Form States
     const [tokenName, setTokenName] = useState('');
@@ -1025,7 +1026,7 @@ const handleLaunchToken = async () => {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    padding: 0 20px;
+                    padding: 0 15px;
                     background-color: #111;
                     border-bottom: 1px solid #333;
                     z-index: 1000;
@@ -1044,6 +1045,15 @@ const handleLaunchToken = async () => {
                     gap: 10px;
                 }
 
+                .mobile-menu-toggle {
+                    display: none;
+                    background: none;
+                    border: none;
+                    color: #fff;
+                    font-size: 24px;
+                    cursor: pointer;
+                }
+
                 .app-container {
                     display: flex;
                     height: calc(100vh - 60px);
@@ -1058,6 +1068,7 @@ const handleLaunchToken = async () => {
                     border-right: 1px solid #333;
                     height: 100%;
                     box-sizing: border-box;
+                    transition: transform 0.3s ease-in-out;
                 }
                 .wallet-adapter-button-trigger{
                     background-color: #00000015 !important;}
@@ -1102,6 +1113,7 @@ const handleLaunchToken = async () => {
                     cursor: pointer;
                     font-weight: bold;
                     white-space: nowrap;
+                    font-size: 0.9em;
                 }
 
                 .home-page {
@@ -1137,6 +1149,7 @@ const handleLaunchToken = async () => {
                     border: none;
                     cursor: pointer;
                     border-radius: 5px;
+                    font-size: 0.9em;
                 }
 
                 .search-input {
@@ -1160,6 +1173,7 @@ const handleLaunchToken = async () => {
                     display: flex;
                     align-items: center;
                     gap: 5px;
+                    font-size: 0.9em;
                 }
 
                 .token-grid {
@@ -1745,6 +1759,237 @@ const handleLaunchToken = async () => {
                     color: #000;
                     transform: scale(1.1);
                 }
+
+                /* Mobile Responsiveness */
+                @media (max-width: 768px) {
+                    .header {
+                        padding: 0 10px;
+                    }
+
+                    .logo {
+                        font-size: 1em;
+                    }
+
+                    .create-coin {
+                        display: none;
+                    }
+
+                    .mobile-menu-toggle {
+                        display: block;
+                    }
+
+                    .header-actions {
+                        gap: 5px;
+                    }
+
+                    .app-container {
+                        flex-direction: column;
+                        height: auto;
+                    }
+
+                    .sidebar {
+                        position: fixed;
+                        top: 60px;
+                        left: 0;
+                        width: 250px;
+                        height: calc(100vh - 60px);
+                        transform: translateX(-100%);
+                        z-index: 999;
+                    }
+
+                    .sidebar.open {
+                        transform: translateX(0);
+                    }
+
+                    .main-content {
+                        padding: 15px;
+                        margin-top: 0;
+                        width: 100%;
+                    }
+
+                    .filters {
+                        flex-direction: column;
+                        align-items: stretch;
+                    }
+
+                    .filters > div {
+                        order: 3;
+                        margin-top: 10px;
+                    }
+
+                    .search-input {
+                        min-width: auto;
+                        margin-bottom: 10px;
+                    }
+
+                    .search-button {
+                        justify-content: center;
+                        width: 100%;
+                    }
+
+                    .token-grid {
+                        grid-template-columns: 1fr;
+                        gap: 15px;
+                    }
+
+                    .token-card {
+                        padding: 15px;
+                    }
+
+                    .token-image {
+                        height: 150px;
+                    }
+
+                    .token-stats {
+                        flex-direction: column;
+                        gap: 5px;
+                    }
+
+                    .token-metrics {
+                        font-size: 0.75em;
+                    }
+
+                    .launch-container {
+                        flex-direction: column;
+                        gap: 20px;
+                    }
+
+                    .launch-form-container,
+                    .preview-panel {
+                        flex: none;
+                        width: 100%;
+                    }
+
+                    .preview-panel {
+                        position: static;
+                    }
+
+                    .modal-content {
+                        width: 95%;
+                        max-height: 95vh;
+                    }
+
+                    .modal-header {
+                        padding: 15px;
+                    }
+
+                    .modal-body {
+                        padding: 15px;
+                    }
+
+                    .token-detail-image {
+                        height: 200px;
+                    }
+
+                    .ca-copy-section {
+                        flex-direction: column;
+                        gap: 10px;
+                        align-items: stretch;
+                    }
+
+                    .copy-button {
+                        margin-left: 0;
+                        width: 100%;
+                        justify-content: center;
+                    }
+
+                    .trade-tabs {
+                        flex-direction: column;
+                    }
+
+                    .trade-tab {
+                        width: 100%;
+                    }
+
+                    .social-links-large {
+                        gap: 10px;
+                    }
+
+                    .social-links-large a {
+                        width: 40px;
+                        height: 40px;
+                        font-size: 1.1em;
+                    }
+
+                    .status-bar {
+                        padding: 8px;
+                        font-size: 0.9em;
+                    }
+
+                    .no-tokens {
+                        padding: 40px 15px;
+                    }
+
+                    .no-tokens div {
+                        font-size: 2em;
+                    }
+
+                    .no-tokens p {
+                        font-size: 1.1em;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .header {
+                        height: 50px;
+                        padding: 0 10px;
+                    }
+
+                    .app-container {
+                        height: calc(100vh - 50px);
+                        margin-top: 50px;
+                    }
+
+                    .sidebar {
+                        top: 50px;
+                        width: 100%;
+                        height: calc(100vh - 50px);
+                    }
+
+                    .logo {
+                        font-size: 0.9em;
+                    }
+
+                    .main-content {
+                        padding: 10px;
+                    }
+
+                    .trending-bar {
+                        padding: 8px;
+                        font-size: 0.9em;
+                    }
+
+                    .filters button {
+                        padding: 8px 12px;
+                        font-size: 0.8em;
+                    }
+
+                    .token-card h3 {
+                        font-size: 1em;
+                    }
+
+                    .token-card p {
+                        font-size: 0.8em;
+                    }
+
+                    .input-group input,
+                    .input-group textarea,
+                    .input-group select {
+                        padding: 12px;
+                        font-size: 16px; /* Prevents zoom on iOS */
+                    }
+
+                    .launch-button,
+                    .trade-button {
+                        padding: 12px;
+                        font-size: 1em;
+                    }
+
+                    .modal-content {
+                        width: 98%;
+                        margin: 10px;
+                    }
+                }
             `}</style>
             <div className="app-container">
                 {/* Header */}
@@ -1757,6 +2002,12 @@ const handleLaunchToken = async () => {
                         >
                             Create Coin
                         </button>
+                        <button 
+                            className="mobile-menu-toggle"
+                            onClick={() => setShowMobileMenu(!showMobileMenu)}
+                        >
+                            {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
+                        </button>
                         <div className="wallet">
                             <WalletMultiButton />
                         </div>
@@ -1765,16 +2016,22 @@ const handleLaunchToken = async () => {
 
                 <div style={{ display: 'flex', width: '100%', height: '100%' }}>
                     {/* Sidebar */}
-                    <nav className="sidebar">
+                    <nav className={`sidebar ${showMobileMenu ? 'open' : ''}`}>
                         <button 
                             className={activePage === 'home' ? 'active' : ''}
-                            onClick={() => setActivePage('home')}
+                            onClick={() => {
+                                setActivePage('home');
+                                setShowMobileMenu(false);
+                            }}
                         >
                             <Home size={18} /> Home
                         </button>
                         <button 
                             className={activePage === 'launch' ? 'active' : ''}
-                            onClick={() => setActivePage('launch')}
+                            onClick={() => {
+                                setActivePage('launch');
+                                setShowMobileMenu(false);
+                            }}
                         >
                             <Rocket size={18} /> Launch
                         </button>
