@@ -1219,7 +1219,7 @@ const handleLaunchToken = async () => {
                     z-index: 999;
                 }
                 .wallet-adapter-button-trigger{
-                    background: linear-gradient(45deg, #1cc29a, #00ff88) !important;
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a) !important;
                     border-radius: 12px !important;
                     padding: 8px 16px !important;
                 }
@@ -1244,7 +1244,7 @@ const handleLaunchToken = async () => {
                     color: #1cc29a;
                 }
                 .sidebar button.active {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     box-shadow: 0 4px 20px rgba(28, 194, 154, 0.3);
                 }
@@ -1256,7 +1256,7 @@ const handleLaunchToken = async () => {
                     margin-left: 250px;
                 }
                 .create-coin {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     padding: 12px 24px;
                     border: none;
@@ -1281,7 +1281,7 @@ const handleLaunchToken = async () => {
                 .home-hero h1 {
                     font-family: 'Orbitron', monospace;
                     font-size: 3em;
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     -webkit-background-clip: text;
                     -webkit-text-fill-color: transparent;
                     margin-bottom: 20px;
@@ -1296,7 +1296,7 @@ const handleLaunchToken = async () => {
                     color: #fff;
                 }
                 .trending-bar {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     padding: 15px 25px;
                     margin-bottom: 30px;
                     border-radius: 15px;
@@ -1352,7 +1352,7 @@ const handleLaunchToken = async () => {
                     color: #888;
                 }
                 .search-button {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     padding: 12px 20px;
                     border: none;
@@ -1390,7 +1390,7 @@ const handleLaunchToken = async () => {
                     left: 0;
                     right: 0;
                     height: 4px;
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     transform: scaleX(0);
                     transition: transform 0.3s ease;
                 }
@@ -1525,14 +1525,14 @@ const handleLaunchToken = async () => {
                     overflow: hidden;
                 }
                 .progress {
-                    background: linear-gradient(90deg, #1cc29a 0%, #00ff88 100%);
+                    background: linear-gradient(90deg, #1cc29a 0%, #1cc29a 100%);
                     height: 100%;
                     border-radius: 10px;
                     transition: width 0.5s ease;
                     box-shadow: 0 0 10px rgba(28, 194, 154, 0.5);
                 }
                 .buy-button {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     padding: 12px 24px;
                     border: none;
@@ -1556,7 +1556,7 @@ const handleLaunchToken = async () => {
                 .launch-page h1 {
                     font-family: 'Orbitron', monospace;
                     font-size: 2.5em;
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     -webkit-background-clip: text;
                     -webkit-text-fill-color: transparent;
                     margin-bottom: 30px;
@@ -1635,7 +1635,7 @@ const handleLaunchToken = async () => {
                     accent-color: #1cc29a;
                 }
                 .launch-button {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     width: 100%;
                     padding: 18px;
@@ -1831,7 +1831,7 @@ const handleLaunchToken = async () => {
                     flex: 1;
                 }
                 .copy-button {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     border: none;
                     padding: 10px 20px;
@@ -1845,7 +1845,7 @@ const handleLaunchToken = async () => {
                     transform: scale(1.05);
                 }
                 .copy-button.copied {
-                    background: #00ff88;
+                    background: #1cc29a;
                 }
                 .trade-tabs {
                     display: flex;
@@ -1866,7 +1866,7 @@ const handleLaunchToken = async () => {
                     transition: all 0.2s ease;
                 }
                 .trade-tab.active {
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                 }
                 .trade-input-group {
@@ -1891,7 +1891,7 @@ const handleLaunchToken = async () => {
                 .trade-button {
                     width: 100%;
                     padding: 18px;
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     border: none;
                     border-radius: 12px;
@@ -1939,7 +1939,7 @@ const handleLaunchToken = async () => {
                     position: absolute;
                     top: 15px;
                     right: 15px;
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     color: #000;
                     padding: 4px 10px;
                     border-radius: 20px;
@@ -1975,7 +1975,7 @@ const handleLaunchToken = async () => {
                     margin-bottom: 20px;
                 }
                 .status-success {
-                    color: #00ff88;
+                    color: #1cc29a;
                 }
                 .status-error {
                     color: #ff6666;
@@ -2225,7 +2225,7 @@ const handleLaunchToken = async () => {
                 <header className="header">
                     <div className="logo"><img src="/logo.png" alt="logo"  />USDARK PAD</div>
                     <div className="header-actions">
-                        <select value={network} onChange={(e) => setNetwork(e.target.value)} style={{ padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid #1cc29a' }}>
+                        <select value={network} onChange={(e) => setNetwork(e.target.value)} style={{ padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: '#1cc29a', border: '1px solid #1cc29a' }}>
                             <option value="devnet">Devnet</option>
                             <option value="mainnet">Mainnet</option>
                         </select>
