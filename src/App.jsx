@@ -1175,7 +1175,7 @@ const handleLaunchToken = async () => {
                     font-family: 'Orbitron', monospace;
                     font-size: 1.8em;
                     font-weight: 700;
-                    background: linear-gradient(45deg, #1cc29a, #00ff88);
+                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
                     -webkit-background-clip: text;
                     -webkit-text-fill-color: transparent;
                     background-clip: text;
@@ -1184,7 +1184,7 @@ const handleLaunchToken = async () => {
                 .logo img{
                     height: 50px;
                     vertical-align: middle;
-                    margin-right: 10px;
+                    margin-right: 15px;
                 }
                 .header-actions {
                     display: flex;
@@ -2156,7 +2156,7 @@ const handleLaunchToken = async () => {
                         .logo img{
                     height: 30px;
                     vertical-align: middle;
-                    margin-right: 0;
+                    margin-right: 8px;
                 }
                     .main-content {
                         padding: 15px 10px;
