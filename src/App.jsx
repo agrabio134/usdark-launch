@@ -2151,7 +2151,7 @@ const handleLaunchToken = async () => {
                         height: calc(100vh - 55px);
                     }
                     .logo {
-                        font-size: 1.2em;
+                        font-size: 0.9em;
                     }
                         .logo img{
                     height: 30px;
