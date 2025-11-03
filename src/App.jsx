@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, Keypair, TransactionInstruction } from '@solana/web3.js';
+import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, Keypair, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import {
     TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -82,7 +82,7 @@ const VIRTUAL_SOL_LAMPORTS = BigInt(30 * LAMPORTS_PER_SOL);
 const VIRTUAL_TOKENS_BASE = 200000000n;
 const DBC_PROGRAM_ID = new PublicKey('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');
 const USDARK_MINT = new PublicKey('4EKDKWJDrqrCQtAD6j9sM5diTeZiKBepkEB8GLP9Dark');
-const USDARK_DECIMALS = 9; // Assuming 9 decimals for USDARK
+const USDARK_DECIMALS = 6; // Assuming 6 decimals for USDARK
 const LAUNCH_FEE_USDARK = 2000; // UI amount of USDARK required
 const USDARK_BYPASS = 1; // 0 for development (skip check/fee), 1 for mandatory
 // Helper functions
@@ -133,12 +133,12 @@ const uploadToIPFS = async (imageFile, metadata, tokenName) => {
             imageHash = await uploadToPinata(imageFile, { pinataMetadata: { name: `${tokenName}_image` } });
         }
         metadata.image = imageHash ? `https://ipfs.io/ipfs/${imageHash}` : '';
-      
+   
         // Add social links to metadata
         if (metadata.twitter) metadata.twitter = metadata.twitter;
         if (metadata.telegram) metadata.telegram = metadata.telegram;
         if (metadata.website) metadata.website = metadata.website;
-      
+   
         const metadataHash = await uploadToPinata(metadata, { pinataMetadata: { name: `${tokenName}_metadata` } });
         return `https://ipfs.io/ipfs/${metadataHash}`;
     } catch (error) {
@@ -192,7 +192,6 @@ const calculateSolOut = (tokensInUnits, solReservesLamports, tokenReservesUnits,
 const TokenCard = ({ token, onAction, solPrice }) => {
     const isNew = token.timestamp && (Date.now() - token.timestamp < 3600000);
     const progress = token.graduated ? 100 : (token.solCollected / MIGRATION_TARGET_SOL) * 100;
-  
     // Calculate metrics using bonding curve
     const virtualSol = 30;
     const virtualTokens = 200000000; // Fixed to match VIRTUAL_TOKENS_BASE
@@ -208,7 +207,6 @@ const TokenCard = ({ token, onAction, solPrice }) => {
     const marketCap = circulatingTokens * tokenPrice;
     const fdv = TOTAL_SUPPLY_TOKENS * tokenPrice;
     const liquidity = token.solCollected * solPrice;
-  
     return (
         <div className="token-card" onClick={() => onAction(token, 'view')}>
             {isNew && <div className="new-badge">NEW</div>}
@@ -243,7 +241,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             </div>
             <p className="token-description">{token.description?.substring(0, 100)}{token.description?.length > 100 ? '...' : ''}</p>
             <div className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</div>
-          
+       
             {/* Token Metrics */}
             <div className="token-metrics">
                 <div className="metric-row">
@@ -267,7 +265,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <span>${(token.volume || 0).toFixed(2)}</span>
                 </div>
             </div>
-          
+       
             {!token.graduated && (
                 <>
                     <div className="bonding-info">
@@ -279,7 +277,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     </div>
                 </>
             )}
-          
+       
             <div className="token-stats">
                 <div>
                     <div>Supply</div>
@@ -290,7 +288,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <div>{token.holders || 1}</div>
                 </div>
             </div>
-          
+       
             <button
                 className="buy-button"
                 onClick={(e) => {
@@ -317,7 +315,6 @@ function App() {
             return null;
         }
     }, [publicKey]);
-  
     const [status, setStatus] = useState('Fair SPL token launcher with bonding curve - 0.02 SOL launch fee');
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [isSending, setIsSending] = useState(false);
@@ -335,7 +332,7 @@ function App() {
     const [imagePreview, setImagePreview] = useState('');
     const [decimals, setDecimals] = useState(6);
     const [useVanityAddress, setUseVanityAddress] = useState(false);
-    const [vanitySuffix, setVanitySuffix] = useState('DARK');
+    const [vanitySuffix, setVanitySuffix] = useState('');
     const [twitterUrl, setTwitterUrl] = useState('');
     const [telegramUrl, setTelegramUrl] = useState('');
     const [websiteUrl, setWebsiteUrl] = useState('');
@@ -373,7 +370,6 @@ function App() {
         const interval = setInterval(fetchSolPrice, 60000); // Update every minute
         return () => clearInterval(interval);
     }, []);
-  
     // Firebase Authentication
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -457,7 +453,6 @@ function App() {
             try {
                 const solBal = await solanaConnection.getBalance(walletPublicKey) / LAMPORTS_PER_SOL;
                 setUserSolBalance(solBal);
-
                 const userAta = getAssociatedTokenAddressSync(USDARK_MINT, walletPublicKey);
                 try {
                     const bal = await solanaConnection.getTokenAccountBalance(userAta);
@@ -543,19 +538,19 @@ function App() {
             setSelectedToken(token);
             setShowModal(true);
             setModalTab('buy');
-          
+       
             // Fetch user balances
             if (connected && walletPublicKey && solanaConnection) {
                 try {
                     // Get SOL balance
                     const solBal = await solanaConnection.getBalance(walletPublicKey);
                     setUserSolBalance(solBal / LAMPORTS_PER_SOL);
-                  
+               
                     // Get token balance
                     const mint = new PublicKey(token.mint);
                     const userATA = getAssociatedTokenAddressSync(mint, walletPublicKey);
                     const accountInfo = await solanaConnection.getAccountInfo(userATA);
-                  
+               
                     if (accountInfo) {
                         const tokenAccountInfo = await solanaConnection.getTokenAccountBalance(userATA);
                         setUserTokenBalance(parseFloat(tokenAccountInfo.value.uiAmount || 0));
@@ -599,7 +594,7 @@ function App() {
         setIsSending(true);
         setStatus(`🔄 Preparing ${modalTab}...`);
         setShowStatusModal(true);
-      
+   
         try {
             const pool = new PublicKey(selectedToken.pool);
             let amountIn;
@@ -647,7 +642,7 @@ function App() {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-          
+       
             await solanaConnection.confirmTransaction({
                 signature,
                 blockhash,
@@ -766,6 +761,15 @@ const handleLaunchToken = async () => {
                 await solanaConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
                 setStatus('✅ Fee USDARK account created.');
                 setShowStatusModal(true);
+                // Verify fee ATA creation
+                setStatus('🔄 Verifying fee account creation...');
+                setShowStatusModal(true);
+                const verifyFeeAta = await solanaConnection.getAccountInfo(feeAtaAddress, 'confirmed');
+                if (!verifyFeeAta || !verifyFeeAta.owner.equals(TOKEN_PROGRAM_ID)) {
+                    throw new Error('Failed to verify fee ATA creation - account not found or invalid');
+                }
+                setStatus('✅ Fee account verified.');
+                setShowStatusModal(true);
             }
         }
         setStatus('🔄 Uploading to IPFS...');
@@ -841,6 +845,16 @@ const handleLaunchToken = async () => {
             setStatus('🔄 Sending USDARK fee...');
             setShowStatusModal(true);
             const feeAtaAddress = getAssociatedTokenAddressSync(USDARK_MINT, FEE_WALLET);
+            // Double-check fee ATA exists before transfer
+            const feeCheck = await solanaConnection.getAccountInfo(feeAtaAddress, 'confirmed');
+            if (!feeCheck || !feeCheck.owner.equals(TOKEN_PROGRAM_ID)) {
+                throw new Error('Fee ATA missing before transfer - creation may have failed');
+            }
+            // Double-check user balance before transfer
+            const currentBalance = await solanaConnection.getTokenAccountBalance(userUsdArkAta);
+            if (currentBalance.value.uiAmount < LAUNCH_FEE_USDARK) {
+                throw new Error(`Insufficient USDARK balance before transfer. Need ${LAUNCH_FEE_USDARK} USDARK, have ${currentBalance.value.uiAmount}.`);
+            }
             const feeAmount = new BN(LAUNCH_FEE_USDARK * (10 ** USDARK_DECIMALS));
             const transferIx = createTransferInstruction(
                 userUsdArkAta,
@@ -854,7 +868,7 @@ const handleLaunchToken = async () => {
             feeTx.feePayer = walletPublicKey;
             const signedFeeTx = await signTransaction(feeTx);
             const feeSig = await solanaConnection.sendRawTransaction(signedFeeTx.serialize(), {
-                skipPreflight: true,
+                skipPreflight: false, // Changed to false for better error debugging
                 preflightCommitment: 'confirmed',
                 maxRetries: 5
             });
@@ -873,9 +887,9 @@ const handleLaunchToken = async () => {
             setStatus('✅ USDARK sent. Creating config...');
             setShowStatusModal(true);
         }
-        // Now create config
+        // Now create config using VersionedTransaction
         let { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
-        let configTx = await client.partner.createConfig({
+        const configInstructions = await client.partner._createConfigIx({
             config: config.publicKey,
             feeClaimer: FEE_WALLET,
             leftoverReceiver: FEE_WALLET,
@@ -883,17 +897,22 @@ const handleLaunchToken = async () => {
             quoteMint: NATIVE_MINT,
             ...curveConfig,
         });
-        configTx.add(SystemProgram.transfer({
+        const feeTransferIx = SystemProgram.transfer({
             fromPubkey: walletPublicKey,
             toPubkey: FEE_WALLET,
             lamports: BASE_FEE,
-        }));
-        configTx.recentBlockhash = blockhash;
-        configTx.feePayer = walletPublicKey;
-        configTx.partialSign(config);
-        let signedTx = await signTransaction(configTx);
-        let signature = await solanaConnection.sendRawTransaction(signedTx.serialize(), {
-            skipPreflight: true,
+        });
+        const allConfigInstructions = [...configInstructions, feeTransferIx];
+        const configMessageV0 = new TransactionMessage({
+            payerKey: walletPublicKey,
+            recentBlockhash: blockhash,
+            instructions: allConfigInstructions,
+        }).compileToV0Message();
+        const configVersionedTx = new VersionedTransaction(configMessageV0);
+        configVersionedTx.sign([config]);
+        let signedConfigTx = await signTransaction(configVersionedTx);
+        let signature = await solanaConnection.sendRawTransaction(signedConfigTx.serialize(), {
+            skipPreflight: false,
             preflightCommitment: 'confirmed',
             maxRetries: 5
         });
@@ -913,7 +932,7 @@ const handleLaunchToken = async () => {
         }
         setStatus('✅ Config created. Creating pool...');
         setShowStatusModal(true);
-        blockhash = (await solanaConnection.getLatestBlockhash('confirmed')).blockhash;
+        const { blockhash: poolBlockhash, lastValidBlockHeight: poolLastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
         const createPoolParam = {
             baseMint: mint.publicKey,
             config: config.publicKey,
@@ -923,21 +942,24 @@ const handleLaunchToken = async () => {
             payer: walletPublicKey,
             poolCreator: walletPublicKey,
         };
-        let poolTx = await client.pool.createPool(createPoolParam);
-        poolTx.recentBlockhash = blockhash;
-        poolTx.feePayer = walletPublicKey;
-        poolTx.partialSign(mint);
-        signedTx = await signTransaction(poolTx);
-        signature = await solanaConnection.sendRawTransaction(signedTx.serialize(), {
-            skipPreflight: true,
+        const poolInstructions = await client.pool._createPoolIx(createPoolParam);
+        const poolMessageV0 = new TransactionMessage({
+            payerKey: walletPublicKey,
+            recentBlockhash: poolBlockhash,
+            instructions: poolInstructions,
+        }).compileToV0Message();
+        const poolVersionedTx = new VersionedTransaction(poolMessageV0);
+        poolVersionedTx.sign([mint]);
+        let signedPoolTx = await signTransaction(poolVersionedTx);
+        signature = await solanaConnection.sendRawTransaction(signedPoolTx.serialize(), {
+            skipPreflight: false,
             preflightCommitment: 'confirmed',
             maxRetries: 5
         });
-        lastValidBlockHeight = (await solanaConnection.getLatestBlockhash('confirmed')).lastValidBlockHeight;
         await solanaConnection.confirmTransaction({
             signature,
-            blockhash,
-            lastValidBlockHeight
+            blockhash: poolBlockhash,
+            lastValidBlockHeight: poolLastValidBlockHeight
         }, 'confirmed');
         // Verify pool creation success
         const confirmedPoolTx = await solanaConnection.getTransaction(signature, {
@@ -999,13 +1021,13 @@ const handleLaunchToken = async () => {
             transactions: 0,
             holders: 1
         };
-      
+   
         setPendingTokenData(newToken);
         setShowInitialBuyModal(true);
-      
+   
     } catch (error) {
         console.error('Launch error:', error);
-      
+   
         // Enhanced error logging
         if (error.logs) {
             console.error('Transaction logs:', error.logs);
@@ -1048,7 +1070,7 @@ const handleLaunchToken = async () => {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-          
+       
             await solanaConnection.confirmTransaction({
                 signature,
                 blockhash,
@@ -1076,17 +1098,17 @@ const handleLaunchToken = async () => {
                 holders: 2
             };
             await updateTokenInFirestore(docId, updates);
-          
+       
             setStatus(`🎉 Token launched with initial buy of ${solAmount} SOL! TX: ${signature}`);
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
             setInitialBuyAmount('0.5');
-          
+       
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-          
+       
         } catch (error) {
             console.error('Initial buy error:', error);
             setStatus(`❌ Error: ${error.message}`);
@@ -1096,18 +1118,18 @@ const handleLaunchToken = async () => {
     const handleSkipInitialBuy = async () => {
         try {
             if (!pendingTokenData) return;
-          
+       
             await saveTokenToFirestore(pendingTokenData);
-          
+       
             setStatus(`🎉 Token launched and saved! No initial buy.`);
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
-          
+       
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-          
+       
         } catch (error) {
             console.error('Save error:', error);
             setStatus(`❌ Error saving token: ${error.message}`);
@@ -1115,18 +1137,18 @@ const handleLaunchToken = async () => {
         }
     };
     const requireUsdark = USDARK_BYPASS === 1;
-    const enoughSol = userSolBalance >= 0.03; // Slightly more than 0.02 for gas fees
+    const enoughSol = userSolBalance >= 0.1; // Increased buffer for multiple tx fees + rent exemptions (USDARK tx, config tx, pool tx including mint creation ~0.002 SOL rent)
     const enoughUsdark = !requireUsdark || userUsdarkBalance >= LAUNCH_FEE_USDARK;
     const formComplete = tokenName && ticker && description && imageFile;
     return (
         <>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
-              
+           
                 * {
                     box-sizing: border-box;
                 }
-              
+           
                 body {
                     margin: 0;
                     font-family: 'Inter', sans-serif;
@@ -1157,6 +1179,12 @@ const handleLaunchToken = async () => {
                     -webkit-background-clip: text;
                     -webkit-text-fill-color: transparent;
                     background-clip: text;
+                }
+
+                .logo img{
+                    height: 50px;
+                    vertical-align: middle;
+                    margin-right: 10px;
                 }
                 .header-actions {
                     display: flex;
@@ -2125,6 +2153,11 @@ const handleLaunchToken = async () => {
                     .logo {
                         font-size: 1.2em;
                     }
+                        .logo img{
+                    height: 30px;
+                    vertical-align: middle;
+                    margin-right: 0;
+                }
                     .main-content {
                         padding: 15px 10px;
                     }
@@ -2190,7 +2223,7 @@ const handleLaunchToken = async () => {
             <div className="app-container">
                 {/* Header */}
                 <header className="header">
-                    <div className="logo">USDARK LAUNCHPAD</div>
+                    <div className="logo"><img src="/logo.jpg" alt="logo"  />USDARK PAD</div>
                     <div className="header-actions">
                         <select value={network} onChange={(e) => setNetwork(e.target.value)} style={{ padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid #1cc29a' }}>
                             <option value="devnet">Devnet</option>
@@ -2427,7 +2460,7 @@ const handleLaunchToken = async () => {
                                         >
                                             {isSending ? 'Launching...' : USDARK_BYPASS === 1 ? 'Launch Token (0.02 SOL + 2000 USDARK)' : 'Launch Token (0.02 SOL)'}
                                         </button>
-                                        {!enoughSol && <p style={{color: 'red'}}>Insufficient SOL balance (need at least 0.03 SOL)</p>}
+                                        {!enoughSol && <p style={{color: 'red'}}>Insufficient SOL balance (need at least 0.1 SOL for fees and rent)</p>}
                                         {requireUsdark && !enoughUsdark && <p style={{color: 'red'}}>Insufficient USDARK balance (need at least 2000 USDARK)</p>}
                                         {!formComplete && <p style={{color: 'red'}}>Please complete all required fields</p>}
                                     </form>
@@ -2448,11 +2481,11 @@ const handleLaunchToken = async () => {
                                                     Upload image to preview
                                                 </div>
                                             )}
-                                          
+                                       
                                             <h3 style={{ marginBottom: '10px', fontSize: '1.3em' }}>{tokenName || 'Token Name'} ({ticker || 'TICKER'})</h3>
-                                          
+                                       
                                             <p style={{ color: '#ccc', marginBottom: '15px', fontSize: '0.9em' }}>{description || 'Enter a description for your token...'}</p>
-                                          
+                                       
                                             <div className="preview-stats">
                                                 <div>
                                                     <span>Total Supply</span>
@@ -2467,16 +2500,16 @@ const handleLaunchToken = async () => {
                                                     <span>85 SOL</span>
                                                 </div>
                                             </div>
-                                          
+                                       
                                             <div className="bonding-info">
                                                 <div>💰 SOL Collected: 0 / 85</div>
                                                 <div>🎯 Progress: 0%</div>
                                             </div>
-                                          
+                                       
                                             <div className="progress-bar">
                                                 <div className="progress" style={{ width: '0%' }}></div>
                                             </div>
-                                          
+                                       
                                             <div className="preview-fee">
                                                 <div><DollarSign size={16} style={{ display: 'inline', marginRight: '5px' }} /> Launch Fee: 0.02 SOL (~$3 USD) {USDARK_BYPASS === 1 ? '+ 2000 USDARK (sent to fee wallet)' : ''}</div>
                                                 <div>🎯 Bonding Curve: Manual trading until 85 SOL</div>
@@ -2508,9 +2541,9 @@ const handleLaunchToken = async () => {
                                 className="token-detail-image"
                                 onError={(e) => e.target.src = 'https://via.placeholder.com/600x250?text=USDARK'}
                             />
-                          
-                            <p style={{ color: '#ccc', fontSize: '0.95em', lineHeight: '1.5' }}>{selectedToken.description}</p>
-                          
+                       
+                            <p style={{ color: '#ccc', fontSize: '0.95em' }}> {selectedToken.description}</p>
+                       
                             {/* Social Links */}
                             {(selectedToken.twitter || selectedToken.telegram || selectedToken.website) && (
                                 <div className="social-links-large">
@@ -2531,7 +2564,7 @@ const handleLaunchToken = async () => {
                                     )}
                                 </div>
                             )}
-                          
+                       
                             {/* Contract Address */}
                             <div className="ca-copy-section">
                                 <span className="ca-address">Contract: {selectedToken.mint}</span>
@@ -2542,7 +2575,7 @@ const handleLaunchToken = async () => {
                                     {copiedCA ? '✓ Copied' : 'Copy CA'}
                                 </button>
                             </div>
-                          
+                       
                             {/* Token Stats */}
                             <div className="preview-stats">
                                 <div>
@@ -2560,7 +2593,7 @@ const handleLaunchToken = async () => {
                                     </span>
                                 </div>
                             </div>
-                          
+                       
                             {/* Advanced Metrics */}
                             <div style={{ background: 'rgba(0, 0, 0, 0.3)', padding: '20px', borderRadius: '15px', marginTop: '20px', border: '1px solid rgba(28, 194, 154, 0.1)' }}>
                                 <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#1cc29a', fontFamily: 'Orbitron' }}>Token Metrics</h3>
@@ -2582,7 +2615,7 @@ const handleLaunchToken = async () => {
                                     const volume = (selectedToken.volume || 0) * solPrice;
                                     const txns = selectedToken.transactions || 0;
                                     const makers = selectedToken.holders || 1;
-                                  
+                               
                                     return (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
                                             <div>
@@ -2621,21 +2654,21 @@ const handleLaunchToken = async () => {
                                     );
                                 })()}
                             </div>
-                          
+                       
                             {!selectedToken.graduated && (
                                 <>
                                     <div className="bonding-info">
                                         <div>💰 SOL Collected: {selectedToken.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
                                         <div>🎯 Progress: {((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100).toFixed(1)}%</div>
                                     </div>
-                                  
+                               
                                     <div className="progress-bar">
                                         <div
                                             className="progress"
                                             style={{ width: `${Math.min((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100, 100)}%` }}
                                         ></div>
                                     </div>
-                                  
+                               
                                     {/* User Balances */}
                                     {connected && (
                                         <div style={{
@@ -2655,7 +2688,7 @@ const handleLaunchToken = async () => {
                                             </div>
                                         </div>
                                     )}
-                                  
+                               
                                     {/* Trade Tabs */}
                                     <div className="trade-tabs">
                                         <button
@@ -2671,7 +2704,7 @@ const handleLaunchToken = async () => {
                                             Sell
                                         </button>
                                     </div>
-                                  
+                               
                                     {/* Trade Input */}
                                     <div className="trade-input-group">
                                         <label>{modalTab === 'buy' ? 'Amount (SOL)' : 'Amount (Tokens)'}</label>
@@ -2684,7 +2717,7 @@ const handleLaunchToken = async () => {
                                             onChange={(e) => setTradeAmount(e.target.value)}
                                         />
                                     </div>
-                                  
+                               
                                     <button
                                         className="trade-button"
                                         onClick={handleBuySell}
@@ -2694,14 +2727,14 @@ const handleLaunchToken = async () => {
                                     </button>
                                 </>
                             )}
-                          
+                       
                             {selectedToken.graduated && (
                                 <div className="preview-fee" style={{ background: 'linear-gradient(45deg, rgba(255, 149, 0, 0.1), rgba(255, 170, 0, 0.1))', color: '#ff9500' }}>
                                     <div>🎉 Token Graduated!</div>
                                     <div>Trade on Raydium or Jupiter</div>
                                 </div>
                             )}
-                          
+                       
                             {/* Transaction Link */}
                             {selectedToken.signature && (
                                 <div style={{ marginTop: '25px', textAlign: 'center' }}>
