@@ -1151,7 +1151,7 @@ const handleLaunchToken = async () => {
            
                 body {
                     margin: 0;
-                    font-family: 'Inter', sans-serif;
+  font-family: 'Orbitron', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
                     background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
                     color: #fff;
                     overflow-x: hidden;
@@ -2223,7 +2223,7 @@ const handleLaunchToken = async () => {
             <div className="app-container">
                 {/* Header */}
                 <header className="header">
-                    <div className="logo"><img src="/logo.jpg" alt="logo"  />USDARK PAD</div>
+                    <div className="logo"><img src="/logo.png" alt="logo"  />USDARK PAD</div>
                     <div className="header-actions">
                         <select value={network} onChange={(e) => setNetwork(e.target.value)} style={{ padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid #1cc29a' }}>
                             <option value="devnet">Devnet</option>
