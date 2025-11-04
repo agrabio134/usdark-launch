@@ -17,7 +17,7 @@ import {
 } from '@solana/spl-token';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Home, Rocket, TrendingUp, Search, Menu, X, Info, DollarSign } from 'lucide-react';
+import { Home, Rocket, TrendingUp, Search, Menu, X, Info, DollarSign, Twitter, Send, Globe, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import '@solana/wallet-adapter-react-ui/styles.css';
 import { initializeApp } from 'firebase/app';
@@ -133,12 +133,12 @@ const uploadToIPFS = async (imageFile, metadata, tokenName) => {
             imageHash = await uploadToPinata(imageFile, { pinataMetadata: { name: `${tokenName}_image` } });
         }
         metadata.image = imageHash ? `https://ipfs.io/ipfs/${imageHash}` : '';
-   
+  
         // Add social links to metadata
         if (metadata.twitter) metadata.twitter = metadata.twitter;
         if (metadata.telegram) metadata.telegram = metadata.telegram;
         if (metadata.website) metadata.website = metadata.website;
-   
+  
         const metadataHash = await uploadToPinata(metadata, { pinataMetadata: { name: `${tokenName}_metadata` } });
         return `https://ipfs.io/ipfs/${metadataHash}`;
     } catch (error) {
@@ -224,24 +224,24 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                 <div className="token-socials">
                     {token.twitter && (
                         <a href={token.twitter} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <span>𝕏</span>
+                            <Twitter size={16} />
                         </a>
                     )}
                     {token.telegram && (
                         <a href={token.telegram} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <span>✈️</span>
+                            <Send size={16} />
                         </a>
                     )}
                     {token.website && (
                         <a href={token.website} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <span>🌐</span>
+                            <Globe size={16} />
                         </a>
                     )}
                 </div>
             </div>
             <p className="token-description">{token.description?.substring(0, 100)}{token.description?.length > 100 ? '...' : ''}</p>
             <div className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</div>
-       
+      
             {/* Token Metrics */}
             <div className="token-metrics">
                 <div className="metric-row">
@@ -265,19 +265,19 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <span>${(token.volume || 0).toFixed(2)}</span>
                 </div>
             </div>
-       
+      
             {!token.graduated && (
                 <>
                     <div className="bonding-info">
-                        <div>💰 SOL Collected: {token.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
-                        <div>🎯 Progress: {progress.toFixed(1)}%</div>
+                        <div>SOL Collected: {token.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
+                        <div>Progress: {progress.toFixed(1)}%</div>
                     </div>
                     <div className="progress-bar">
                         <div className="progress" style={{ width: `${Math.min(progress, 100)}%` }}></div>
                     </div>
                 </>
             )}
-       
+      
             <div className="token-stats">
                 <div>
                     <div>Supply</div>
@@ -288,7 +288,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <div>{token.holders || 1}</div>
                 </div>
             </div>
-       
+      
             <button
                 className="buy-button"
                 onClick={(e) => {
@@ -380,7 +380,7 @@ function App() {
                 // Sign in anonymously if not authenticated
                 signInAnonymously(auth).catch((error) => {
                     console.error('Firebase auth error:', error);
-                    setStatus('❌ Firebase authentication failed');
+                    setStatus('Firebase authentication failed');
                     setShowStatusModal(true);
                 });
             }
@@ -405,7 +405,7 @@ function App() {
             console.log(`Loaded ${tokens.length} tokens from Firestore`);
         }, (error) => {
             console.error('Error loading tokens:', error);
-            setStatus('❌ Failed to load tokens from database');
+            setStatus('Failed to load tokens from database');
             setShowStatusModal(true);
             setIsLoadingTokens(false);
         });
@@ -511,7 +511,7 @@ function App() {
                 setStatus(`Connected to ${network.toUpperCase()} network.`);
                 setShowStatusModal(true);
             } catch (error) {
-                setStatus(`❌ Failed to connect to ${network}: ${error.message}`);
+                setStatus(`Failed to connect to ${network}: ${error.message}`);
                 setShowStatusModal(true);
             }
         };
@@ -519,13 +519,13 @@ function App() {
     }, [network]);
     useEffect(() => {
         if (!connected) {
-            setStatus('Please connect your wallet 🔌');
+            setStatus('Please connect your wallet');
             setShowStatusModal(true);
         } else if (walletPublicKey) {
-            setStatus(`✅ Connected: ${walletPublicKey.toString().substring(0, 4)}...${walletPublicKey.toString().slice(-4)} on ${network.toUpperCase()}`);
+            setStatus(`Connected: ${walletPublicKey.toString().substring(0, 4)}...${walletPublicKey.toString().slice(-4)} on ${network.toUpperCase()}`);
             setShowStatusModal(true);
         } else {
-            setStatus('❌ Invalid wallet public key');
+            setStatus('Invalid wallet public key');
             setShowStatusModal(true);
         }
     }, [connected, walletPublicKey, network]);
@@ -538,19 +538,19 @@ function App() {
             setSelectedToken(token);
             setShowModal(true);
             setModalTab('buy');
-       
+      
             // Fetch user balances
             if (connected && walletPublicKey && solanaConnection) {
                 try {
                     // Get SOL balance
                     const solBal = await solanaConnection.getBalance(walletPublicKey);
                     setUserSolBalance(solBal / LAMPORTS_PER_SOL);
-               
+              
                     // Get token balance
                     const mint = new PublicKey(token.mint);
                     const userATA = getAssociatedTokenAddressSync(mint, walletPublicKey);
                     const accountInfo = await solanaConnection.getAccountInfo(userATA);
-               
+              
                     if (accountInfo) {
                         const tokenAccountInfo = await solanaConnection.getTokenAccountBalance(userATA);
                         setUserTokenBalance(parseFloat(tokenAccountInfo.value.uiAmount || 0));
@@ -565,7 +565,7 @@ function App() {
             return;
         }
         if (action === 'trade' && token.graduated) {
-            setStatus('💡 Token graduated! Use Raydium or Jupiter to trade.');
+            setStatus('Token graduated! Use Raydium or Jupiter to trade.');
             setShowStatusModal(true);
             return;
         }
@@ -577,24 +577,24 @@ function App() {
     };
     const handleBuySell = async () => {
         if (!connected || !walletPublicKey || !solanaConnection || !selectedToken || !client) {
-            setStatus('❌ Wallet not connected or client not ready');
+            setStatus('Wallet not connected or client not ready');
             setShowStatusModal(true);
             return;
         }
         if (!tradeAmount || parseFloat(tradeAmount) <= 0) {
-            setStatus('❌ Enter a valid amount');
+            setStatus('Enter a valid amount');
             setShowStatusModal(true);
             return;
         }
         if (selectedToken.graduated) {
-            setStatus('💡 Token graduated! Use Raydium or Jupiter to trade.');
+            setStatus('Token graduated! Use Raydium or Jupiter to trade.');
             setShowStatusModal(true);
             return;
         }
         setIsSending(true);
-        setStatus(`🔄 Preparing ${modalTab}...`);
+        setStatus(`Preparing ${modalTab}...`);
         setShowStatusModal(true);
-   
+  
         try {
             const pool = new PublicKey(selectedToken.pool);
             let amountIn;
@@ -642,7 +642,7 @@ function App() {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-       
+      
             await solanaConnection.confirmTransaction({
                 signature,
                 blockhash,
@@ -656,13 +656,13 @@ function App() {
                 console.error('Trade failed. Logs:', confirmedTradeTx.meta.logMessages);
                 throw new Error(`Trade failed: ${JSON.stringify(confirmedTradeTx.meta.err)}`);
             }
-            setStatus(`✅ ${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${signature}`);
+            setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${signature}`);
             setShowStatusModal(true);
             // The onAccountChange will update the Firestore
             setTradeAmount('');
         } catch (error) {
             console.error('Trade error:', error);
-            setStatus(`❌ Trade failed: ${error.message}`);
+            setStatus(`Trade failed: ${error.message}`);
             setShowStatusModal(true);
         } finally {
             setIsSending(false);
@@ -672,12 +672,12 @@ function App() {
         const file = event.target.files[0];
         if (file) {
             if (!['image/png', 'image/jpeg', 'image/gif'].includes(file.type)) {
-                setStatus('❌ Only PNG, JPG, GIF allowed.');
+                setStatus('Only PNG, JPG, GIF allowed.');
                 setShowStatusModal(true);
                 return;
             }
             if (file.size > 2 * 1024 * 1024) {
-                setStatus('❌ Image size must be under 2MB.');
+                setStatus('Image size must be under 2MB.');
                 setShowStatusModal(true);
                 return;
             }
@@ -689,22 +689,22 @@ function App() {
     };
 const handleLaunchToken = async () => {
     if (!connected || !walletPublicKey || !solanaConnection || !client) {
-        setStatus('❌ Wallet not connected or client not ready');
+        setStatus('Wallet not connected or client not ready');
         setShowStatusModal(true);
         return;
     }
     if (!tokenName || !ticker || !description || !imageFile) {
-        setStatus('❌ Fill all required fields');
+        setStatus('Fill all required fields');
         setShowStatusModal(true);
         return;
     }
     if (tokenName.length > 32 || ticker.length > 10 || description.length > 1000) {
-        setStatus('❌ Name ≤32 chars, Ticker ≤10 chars, Description ≤1000 chars');
+        setStatus('Name ≤32 chars, Ticker ≤10 chars, Description ≤1000 chars');
         setShowStatusModal(true);
         return;
     }
     if (decimals !== 6 && decimals !== 9) {
-        setStatus('❌ Decimals must be 6 or 9');
+        setStatus('Decimals must be 6 or 9');
         setShowStatusModal(true);
         return;
     }
@@ -712,7 +712,7 @@ const handleLaunchToken = async () => {
     try {
         let userUsdArkAta = getAssociatedTokenAddressSync(USDARK_MINT, walletPublicKey);
         if (USDARK_BYPASS === 1) {
-            setStatus('🔄 Preparing USDARK fee...');
+            setStatus('Preparing USDARK fee...');
             setShowStatusModal(true);
             const { address: ataAddress, instruction: createATAIx } = await safeGetOrCreateATA(
                 solanaConnection,
@@ -722,7 +722,7 @@ const handleLaunchToken = async () => {
             );
             userUsdArkAta = ataAddress;
             if (createATAIx) {
-                setStatus('🔄 Creating USDARK account...');
+                setStatus('Creating USDARK account...');
                 setShowStatusModal(true);
                 const tx = new Transaction().add(createATAIx);
                 const { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
@@ -731,10 +731,10 @@ const handleLaunchToken = async () => {
                 const signedTx = await signTransaction(tx);
                 const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
                 await solanaConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-                setStatus('✅ USDARK account created. Checking balance...');
+                setStatus('USDARK account created. Checking balance...');
                 setShowStatusModal(true);
             } else {
-                setStatus('🔄 Checking USDARK balance for launch fee...');
+                setStatus('Checking USDARK balance for launch fee...');
                 setShowStatusModal(true);
             }
             const balance = await solanaConnection.getTokenAccountBalance(userUsdArkAta);
@@ -750,7 +750,7 @@ const handleLaunchToken = async () => {
                 FEE_WALLET
             );
             if (createFeeATAIx) {
-                setStatus('🔄 Creating fee USDARK account...');
+                setStatus('Creating fee USDARK account...');
                 setShowStatusModal(true);
                 const tx = new Transaction().add(createFeeATAIx);
                 const { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
@@ -759,20 +759,20 @@ const handleLaunchToken = async () => {
                 const signedTx = await signTransaction(tx);
                 const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
                 await solanaConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
-                setStatus('✅ Fee USDARK account created.');
+                setStatus('Fee USDARK account created.');
                 setShowStatusModal(true);
                 // Verify fee ATA creation
-                setStatus('🔄 Verifying fee account creation...');
+                setStatus('Verifying fee account creation...');
                 setShowStatusModal(true);
                 const verifyFeeAta = await solanaConnection.getAccountInfo(feeAtaAddress, 'confirmed');
                 if (!verifyFeeAta || !verifyFeeAta.owner.equals(TOKEN_PROGRAM_ID)) {
                     throw new Error('Failed to verify fee ATA creation - account not found or invalid');
                 }
-                setStatus('✅ Fee account verified.');
+                setStatus('Fee account verified.');
                 setShowStatusModal(true);
             }
         }
-        setStatus('🔄 Uploading to IPFS...');
+        setStatus('Uploading to IPFS...');
         setShowStatusModal(true);
         const metadata = {
             name: tokenName,
@@ -784,15 +784,15 @@ const handleLaunchToken = async () => {
             website: websiteUrl || undefined,
         };
         const metadataUri = await uploadToIPFS(imageFile, metadata, tokenName);
-        setStatus('✅ IPFS upload complete. Creating token...');
+        setStatus('IPFS upload complete. Creating token...');
         setShowStatusModal(true);
         let mint;
         if (useVanityAddress && vanitySuffix) {
-            setStatus(`🔄 Generating vanity address ending with "${vanitySuffix.toUpperCase()}"...`);
+            setStatus(`Generating vanity address ending with "${vanitySuffix.toUpperCase()}"...`);
             setShowStatusModal(true);
             mint = generateVanityKeypair(vanitySuffix, 500000, (attempts) => {
                 if (attempts % 10000 === 0) {
-                    setStatus(`🔄 Generating vanity address... ${attempts} attempts`);
+                    setStatus(`Generating vanity address... ${attempts} attempts`);
                     setShowStatusModal(true);
                 }
             });
@@ -842,7 +842,7 @@ const handleLaunchToken = async () => {
         });
         // Burn USDARK in a separate transaction to avoid simulation issues
         if (USDARK_BYPASS === 1) {
-            setStatus('🔄 Sending USDARK fee...');
+            setStatus('Sending USDARK fee...');
             setShowStatusModal(true);
             const feeAtaAddress = getAssociatedTokenAddressSync(USDARK_MINT, FEE_WALLET);
             // Double-check fee ATA exists before transfer
@@ -884,7 +884,7 @@ const handleLaunchToken = async () => {
             if (confirmedFeeTx && confirmedFeeTx.meta && confirmedFeeTx.meta.err) {
                 throw new Error(`Fee transfer failed: ${JSON.stringify(confirmedFeeTx.meta.err)}`);
             }
-            setStatus('✅ USDARK sent. Creating config...');
+            setStatus('USDARK sent. Creating config...');
             setShowStatusModal(true);
         }
         // Now create config using VersionedTransaction
@@ -908,9 +908,9 @@ const handleLaunchToken = async () => {
             recentBlockhash: blockhash,
             instructions: allConfigInstructions,
         }).compileToV0Message();
-        const configVersionedTx = new VersionedTransaction(configMessageV0);
-        configVersionedTx.sign([config]);
-        let signedConfigTx = await signTransaction(configVersionedTx);
+        const unsignedConfigTx = new VersionedTransaction(configMessageV0);
+        let signedConfigTx = await signTransaction(unsignedConfigTx);
+        signedConfigTx.sign([config]);
         let signature = await solanaConnection.sendRawTransaction(signedConfigTx.serialize(), {
             skipPreflight: false,
             preflightCommitment: 'confirmed',
@@ -930,7 +930,7 @@ const handleLaunchToken = async () => {
             console.error('Config creation failed. Logs:', confirmedConfigTx.meta.logMessages);
             throw new Error(`Config creation failed: ${JSON.stringify(confirmedConfigTx.meta.err)}`);
         }
-        setStatus('✅ Config created. Creating pool...');
+        setStatus('Config created. Creating pool...');
         setShowStatusModal(true);
         const { blockhash: poolBlockhash, lastValidBlockHeight: poolLastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
         const createPoolParam = {
@@ -948,9 +948,9 @@ const handleLaunchToken = async () => {
             recentBlockhash: poolBlockhash,
             instructions: poolInstructions,
         }).compileToV0Message();
-        const poolVersionedTx = new VersionedTransaction(poolMessageV0);
-        poolVersionedTx.sign([mint]);
-        let signedPoolTx = await signTransaction(poolVersionedTx);
+        const unsignedPoolTx = new VersionedTransaction(poolMessageV0);
+        let signedPoolTx = await signTransaction(unsignedPoolTx);
+        signedPoolTx.sign([mint]);
         signature = await solanaConnection.sendRawTransaction(signedPoolTx.serialize(), {
             skipPreflight: false,
             preflightCommitment: 'confirmed',
@@ -991,7 +991,7 @@ const handleLaunchToken = async () => {
             // Uncomment below for strict mode (may cause false failures on devnet)
             // throw new Error('Pool account not found or invalid after creation');
         }
-        setStatus(`🎉 Token launched! Signature: ${signature}`);
+        setStatus(`Token launched! Signature: ${signature}`);
         setShowStatusModal(true);
         const bondingSupplyUnits = (BigInt(BONDING_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
         const dexSupplyUnits = (BigInt(DEX_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
@@ -1021,19 +1021,19 @@ const handleLaunchToken = async () => {
             transactions: 0,
             holders: 1
         };
-   
+  
         setPendingTokenData(newToken);
         setShowInitialBuyModal(true);
-   
+  
     } catch (error) {
         console.error('Launch error:', error);
-   
+  
         // Enhanced error logging
         if (error.logs) {
             console.error('Transaction logs:', error.logs);
-            setStatus(`❌ Error: ${error.message}. Check console for logs.`);
+            setStatus(`Error: ${error.message}. Check console for logs.`);
         } else {
-            setStatus(`❌ Error: ${error.message}`);
+            setStatus(`Error: ${error.message}`);
         }
         setShowStatusModal(true);
     } finally {
@@ -1042,12 +1042,12 @@ const handleLaunchToken = async () => {
 };
     const handleInitialBuy = async () => {
         if (!pendingTokenData || !initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || !client) {
-            setStatus('❌ Enter a valid SOL amount');
+            setStatus('Enter a valid SOL amount');
             setShowStatusModal(true);
             return;
         }
         try {
-            setStatus('🔄 Processing initial buy...');
+            setStatus('Processing initial buy...');
             setShowStatusModal(true);
             const solAmount = parseFloat(initialBuyAmount);
             const solInLamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
@@ -1070,7 +1070,7 @@ const handleLaunchToken = async () => {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-       
+      
             await solanaConnection.confirmTransaction({
                 signature,
                 blockhash,
@@ -1098,41 +1098,41 @@ const handleLaunchToken = async () => {
                 holders: 2
             };
             await updateTokenInFirestore(docId, updates);
-       
-            setStatus(`🎉 Token launched with initial buy of ${solAmount} SOL! TX: ${signature}`);
+      
+            setStatus(`Token launched with initial buy of ${solAmount} SOL! TX: ${signature}`);
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
             setInitialBuyAmount('0.5');
-       
+      
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-       
+      
         } catch (error) {
             console.error('Initial buy error:', error);
-            setStatus(`❌ Error: ${error.message}`);
+            setStatus(`Error: ${error.message}`);
             setShowStatusModal(true);
         }
     };
     const handleSkipInitialBuy = async () => {
         try {
             if (!pendingTokenData) return;
-       
+      
             await saveTokenToFirestore(pendingTokenData);
-       
-            setStatus(`🎉 Token launched and saved! No initial buy.`);
+      
+            setStatus('Token launched and saved! No initial buy.');
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
-       
+      
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-       
+      
         } catch (error) {
             console.error('Save error:', error);
-            setStatus(`❌ Error saving token: ${error.message}`);
+            setStatus(`Error saving token: ${error.message}`);
             setShowStatusModal(true);
         }
     };
@@ -1144,11 +1144,11 @@ const handleLaunchToken = async () => {
         <>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
-           
+          
                 * {
                     box-sizing: border-box;
                 }
-           
+          
                 body {
                     margin: 0;
   font-family: 'Orbitron', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
@@ -1180,7 +1180,6 @@ const handleLaunchToken = async () => {
                     -webkit-text-fill-color: transparent;
                     background-clip: text;
                 }
-
                 .logo img{
                     height: 50px;
                     vertical-align: middle;
@@ -2223,7 +2222,7 @@ const handleLaunchToken = async () => {
             <div className="app-container">
                 {/* Header */}
                 <header className="header">
-                    <div className="logo"><img src="/logo.png" alt="logo"  />USDARK PAD</div>
+                    <div className="logo"><img src="/logo.png" alt="logo" />USDARK PAD</div>
                     <div className="header-actions">
                         <select value={network} onChange={(e) => setNetwork(e.target.value)} style={{ padding: '8px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: '#1cc29a', border: '1px solid #1cc29a' }}>
                             <option value="devnet">Devnet</option>
@@ -2308,12 +2307,12 @@ const handleLaunchToken = async () => {
                                 {/* Token Grid */}
                                 {isLoadingTokens ? (
                                     <div className="no-tokens">
-                                        <div>⏳</div>
+                                        <Loader2 size={48} className="animate-spin mx-auto" />
                                         <p>Loading tokens from database...</p>
                                     </div>
                                 ) : filteredTokens.length === 0 ? (
                                     <div className="no-tokens">
-                                        <div>🚀</div>
+                                        <Rocket size={48} className="mx-auto" />
                                         <p>No tokens found</p>
                                         <p>Launch your first memecoin and join the USDARK revolution!</p>
                                     </div>
@@ -2481,11 +2480,11 @@ const handleLaunchToken = async () => {
                                                     Upload image to preview
                                                 </div>
                                             )}
-                                       
+                                      
                                             <h3 style={{ marginBottom: '10px', fontSize: '1.3em' }}>{tokenName || 'Token Name'} ({ticker || 'TICKER'})</h3>
-                                       
+                                      
                                             <p style={{ color: '#ccc', marginBottom: '15px', fontSize: '0.9em' }}>{description || 'Enter a description for your token...'}</p>
-                                       
+                                      
                                             <div className="preview-stats">
                                                 <div>
                                                     <span>Total Supply</span>
@@ -2500,21 +2499,21 @@ const handleLaunchToken = async () => {
                                                     <span>85 SOL</span>
                                                 </div>
                                             </div>
-                                       
+                                      
                                             <div className="bonding-info">
-                                                <div>💰 SOL Collected: 0 / 85</div>
-                                                <div>🎯 Progress: 0%</div>
+                                                <div>SOL Collected: 0 / 85</div>
+                                                <div>Progress: 0%</div>
                                             </div>
-                                       
+                                      
                                             <div className="progress-bar">
                                                 <div className="progress" style={{ width: '0%' }}></div>
                                             </div>
-                                       
+                                      
                                             <div className="preview-fee">
                                                 <div><DollarSign size={16} style={{ display: 'inline', marginRight: '5px' }} /> Launch Fee: 0.02 SOL (~$3 USD) {USDARK_BYPASS === 1 ? '+ 2000 USDARK (sent to fee wallet)' : ''}</div>
-                                                <div>🎯 Bonding Curve: Manual trading until 85 SOL</div>
+                                                <div>Bonding Curve: Manual trading until 85 SOL</div>
                                                 {useVanityAddress && vanitySuffix && (
-                                                    <div>✨ Vanity: ...{vanitySuffix.toUpperCase()}</div>
+                                                    <div>Vanity: ...{vanitySuffix.toUpperCase()}</div>
                                                 )}
                                             </div>
                                             <button className="preview-button" onClick={() => setShowLaunchInfoModal(true)}>View Launch Details</button>
@@ -2541,30 +2540,30 @@ const handleLaunchToken = async () => {
                                 className="token-detail-image"
                                 onError={(e) => e.target.src = 'https://via.placeholder.com/600x250?text=USDARK'}
                             />
-                       
+                      
                             <p style={{ color: '#ccc', fontSize: '0.95em' }}> {selectedToken.description}</p>
-                       
+                      
                             {/* Social Links */}
                             {(selectedToken.twitter || selectedToken.telegram || selectedToken.website) && (
                                 <div className="social-links-large">
                                     {selectedToken.twitter && (
                                         <a href={selectedToken.twitter} target="_blank" rel="noopener noreferrer">
-                                            <span>𝕏</span>
+                                            <Twitter size={20} />
                                         </a>
                                     )}
                                     {selectedToken.telegram && (
                                         <a href={selectedToken.telegram} target="_blank" rel="noopener noreferrer">
-                                            <span>✈️</span>
+                                            <Send size={20} />
                                         </a>
                                     )}
                                     {selectedToken.website && (
                                         <a href={selectedToken.website} target="_blank" rel="noopener noreferrer">
-                                            <span>🌐</span>
+                                            <Globe size={20} />
                                         </a>
                                     )}
                                 </div>
                             )}
-                       
+                      
                             {/* Contract Address */}
                             <div className="ca-copy-section">
                                 <span className="ca-address">Contract: {selectedToken.mint}</span>
@@ -2575,7 +2574,7 @@ const handleLaunchToken = async () => {
                                     {copiedCA ? '✓ Copied' : 'Copy CA'}
                                 </button>
                             </div>
-                       
+                      
                             {/* Token Stats */}
                             <div className="preview-stats">
                                 <div>
@@ -2593,7 +2592,7 @@ const handleLaunchToken = async () => {
                                     </span>
                                 </div>
                             </div>
-                       
+                      
                             {/* Advanced Metrics */}
                             <div style={{ background: 'rgba(0, 0, 0, 0.3)', padding: '20px', borderRadius: '15px', marginTop: '20px', border: '1px solid rgba(28, 194, 154, 0.1)' }}>
                                 <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#1cc29a', fontFamily: 'Orbitron' }}>Token Metrics</h3>
@@ -2615,7 +2614,7 @@ const handleLaunchToken = async () => {
                                     const volume = (selectedToken.volume || 0) * solPrice;
                                     const txns = selectedToken.transactions || 0;
                                     const makers = selectedToken.holders || 1;
-                               
+                              
                                     return (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
                                             <div>
@@ -2654,21 +2653,21 @@ const handleLaunchToken = async () => {
                                     );
                                 })()}
                             </div>
-                       
+                      
                             {!selectedToken.graduated && (
                                 <>
                                     <div className="bonding-info">
-                                        <div>💰 SOL Collected: {selectedToken.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
-                                        <div>🎯 Progress: {((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100).toFixed(1)}%</div>
+                                        <div>SOL Collected: {selectedToken.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
+                                        <div>Progress: {((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100).toFixed(1)}%</div>
                                     </div>
-                               
+                              
                                     <div className="progress-bar">
                                         <div
                                             className="progress"
                                             style={{ width: `${Math.min((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100, 100)}%` }}
                                         ></div>
                                     </div>
-                               
+                              
                                     {/* User Balances */}
                                     {connected && (
                                         <div style={{
@@ -2688,7 +2687,7 @@ const handleLaunchToken = async () => {
                                             </div>
                                         </div>
                                     )}
-                               
+                              
                                     {/* Trade Tabs */}
                                     <div className="trade-tabs">
                                         <button
@@ -2704,7 +2703,7 @@ const handleLaunchToken = async () => {
                                             Sell
                                         </button>
                                     </div>
-                               
+                              
                                     {/* Trade Input */}
                                     <div className="trade-input-group">
                                         <label>{modalTab === 'buy' ? 'Amount (SOL)' : 'Amount (Tokens)'}</label>
@@ -2717,7 +2716,7 @@ const handleLaunchToken = async () => {
                                             onChange={(e) => setTradeAmount(e.target.value)}
                                         />
                                     </div>
-                               
+                              
                                     <button
                                         className="trade-button"
                                         onClick={handleBuySell}
@@ -2727,14 +2726,14 @@ const handleLaunchToken = async () => {
                                     </button>
                                 </>
                             )}
-                       
+                      
                             {selectedToken.graduated && (
                                 <div className="preview-fee" style={{ background: 'linear-gradient(45deg, rgba(255, 149, 0, 0.1), rgba(255, 170, 0, 0.1))', color: '#ff9500' }}>
-                                    <div>🎉 Token Graduated!</div>
+                                    <div>Token Graduated!</div>
                                     <div>Trade on Raydium or Jupiter</div>
                                 </div>
                             )}
-                       
+                      
                             {/* Transaction Link */}
                             {selectedToken.signature && (
                                 <div style={{ marginTop: '25px', textAlign: 'center' }}>
@@ -2759,7 +2758,7 @@ const handleLaunchToken = async () => {
                 <div className="modal-overlay">
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>🎉 Token Launched Successfully!</h2>
+                            <h2>Token Launched Successfully!</h2>
                         </div>
                         <div className="modal-body">
                             <div style={{ textAlign: 'center', marginBottom: '25px' }}>
@@ -2827,13 +2826,13 @@ const handleLaunchToken = async () => {
                             <button className="modal-close" onClick={() => setShowStatusModal(false)}>×</button>
                         </div>
                         <div className="modal-body status-modal-body">
-                            <p className={status.includes('❌') ? 'status-error' : status.includes('✅') || status.includes('🎉') ? 'status-success' : ''}>
+                            <p className={status.includes('Error:') ? 'status-error' : status.includes('successful') || status.includes('launched') ? 'status-success' : ''}>
                                 {status}
                             </p>
                             <button
                                 className="trade-button"
                                 onClick={() => setShowStatusModal(false)}
-                                style={{ background: status.includes('❌') ? '#ff6666' : '#1cc29a', color: '#000' }}
+                                style={{ background: status.includes('Error:') ? '#ff6666' : '#1cc29a', color: '#000' }}
                             >
                                 Dismiss
                             </button>
