@@ -44,9 +44,9 @@ const NETWORKS = {
         'https://dawn-devnet.solana.com'
     ],
     'mainnet': [
+        'https://rpc.ankr.com/solana',
         'https://solana-rpc.publicnode.com',
         'https://api.mainnet-beta.solana.com',
-        'https://rpc.ankr.com/solana',
         'https://solana-mainnet.g.alchemy.com/v2/demo', // Additional fallback
         'https://mainnet.rpcpool.com' // Additional fallback
     ]
@@ -77,7 +77,7 @@ const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24
 const TOTAL_SUPPLY_TOKENS = 1000000000;
 const BONDING_SUPPLY_TOKENS = 800000000;
 const DEX_SUPPLY_TOKENS = 200000000;
-const MIGRATION_TARGET_SOL = 85;
+const MIGRATION_TARGET_SOL = 40;
 const VIRTUAL_SOL_LAMPORTS = BigInt(30 * LAMPORTS_PER_SOL);
 const VIRTUAL_TOKENS_BASE = 200000000n;
 const DBC_PROGRAM_ID = new PublicKey('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');
@@ -239,7 +239,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             </div>
             <p className="token-description">{token.description?.substring(0, 100)}{token.description?.length > 100 ? '...' : ''}</p>
             <div className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</div>
-    
+   
             {/* Token Metrics */}
             <div className="token-metrics">
                 <div className="metric-row">
@@ -263,7 +263,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <span>${(token.volume || 0).toFixed(2)}</span>
                 </div>
             </div>
-    
+   
             {!token.graduated && (
                 <>
                     <div className="bonding-info">
@@ -275,7 +275,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     </div>
                 </>
             )}
-    
+   
             <div className="token-stats">
                 <div>
                     <div>Supply</div>
@@ -286,7 +286,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <div>{token.holders || 1}</div>
                 </div>
             </div>
-    
+   
             <button
                 className="buy-button"
                 onClick={(e) => {
@@ -317,19 +317,6 @@ const confirmSignature = async (connection, signature, commitment = 'confirmed')
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
   throw new Error('Transaction confirmation timeout');
-};
-// Wait for pool function
-const waitForPool = async (connection, poolAddress, maxAttempts = 30) => {
-  for (let i = 0; i < maxAttempts; i++) {
-    const info = await connection.getAccountInfo(poolAddress, 'confirmed');
-    if (info && info.owner.equals(DBC_PROGRAM_ID)) {
-      console.log(`Pool verified on attempt ${i + 1}`);
-      return true;
-    }
-    console.log(`Pool not ready on attempt ${i + 1}, waiting...`);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  }
-  throw new Error('Pool not found after waiting');
 };
 // Main App
 function App() {
@@ -572,19 +559,19 @@ function App() {
             setSelectedToken(token);
             setShowModal(true);
             setModalTab('buy');
-    
+   
             // Fetch user balances
             if (connected && walletPublicKey && solanaConnection) {
                 try {
                     // Get SOL balance
                     const solBal = await solanaConnection.getBalance(walletPublicKey);
                     setUserSolBalance(solBal / LAMPORTS_PER_SOL);
-            
+           
                     // Get token balance
                     const mint = new PublicKey(token.mint);
                     const userATA = getAssociatedTokenAddressSync(mint, walletPublicKey);
                     const accountInfo = await solanaConnection.getAccountInfo(userATA);
-            
+           
                     if (accountInfo) {
                         const tokenAccountInfo = await solanaConnection.getTokenAccountBalance(userATA);
                         setUserTokenBalance(parseFloat(tokenAccountInfo.value.uiAmount || 0));
@@ -630,7 +617,6 @@ function App() {
         setShowStatusModal(true);
         try {
             const pool = new PublicKey(selectedToken.pool);
-            await waitForPool(solanaConnection, pool);
             let amountIn;
             let swapBaseForQuote;
             if (modalTab === 'buy') {
@@ -676,7 +662,7 @@ function App() {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-    
+   
             await confirmSignature(solanaConnection, signature);
             const confirmedTradeTx = await solanaConnection.getTransaction(signature, {
                 commitment: 'confirmed',
@@ -744,61 +730,56 @@ const handleLaunchToken = async () => {
         if (USDARK_BYPASS === 1) {
             setStatus('Preparing USDARK fee...');
             setShowStatusModal(true);
-            const { address: ataAddress, instruction: createATAIx } = await safeGetOrCreateATA(
+            const feeInstructions = [];
+            const { address: ataAddress, instruction: createUserATAIx } = await safeGetOrCreateATA(
                 solanaConnection,
                 walletPublicKey,
                 USDARK_MINT,
                 walletPublicKey
             );
             userUsdArkAta = ataAddress;
-            if (createATAIx) {
-                setStatus('Creating USDARK account...');
-                setShowStatusModal(true);
-                const tx = new Transaction().add(createATAIx);
-                const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = walletPublicKey;
-                const signedTx = await signTransaction(tx);
-                const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
-                await confirmSignature(solanaConnection, sig);
-                setStatus('USDARK account created. Checking balance...');
-                setShowStatusModal(true);
-            } else {
-                setStatus('Checking USDARK balance for launch fee...');
-                setShowStatusModal(true);
+            if (createUserATAIx) {
+                feeInstructions.push(createUserATAIx);
             }
-            const balance = await solanaConnection.getTokenAccountBalance(userUsdArkAta);
-            const uiBalance = balance.value.uiAmount;
-            if (uiBalance < LAUNCH_FEE_USDARK) {
-                throw new Error(`Insufficient USDARK balance. Need ${LAUNCH_FEE_USDARK} USDARK, have ${uiBalance}.`);
-            }
-            // For fee wallet ATA
             const { address: feeAtaAddress, instruction: createFeeATAIx } = await safeGetOrCreateATA(
                 solanaConnection,
-                walletPublicKey, // payer is user
+                walletPublicKey,
                 USDARK_MINT,
                 FEE_WALLET
             );
             if (createFeeATAIx) {
-                setStatus('Creating fee USDARK account...');
+                feeInstructions.push(createFeeATAIx);
+            }
+            const feeAmount = new BN(LAUNCH_FEE_USDARK * (10 ** USDARK_DECIMALS));
+            const transferIx = createTransferInstruction(
+                userUsdArkAta,
+                feeAtaAddress,
+                walletPublicKey,
+                feeAmount
+            );
+            feeInstructions.push(transferIx);
+            if (feeInstructions.length > 0) {
+                setStatus('Processing USDARK fee transaction...');
                 setShowStatusModal(true);
-                const tx = new Transaction().add(createFeeATAIx);
+                const feeTx = new Transaction().add(...feeInstructions);
                 const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-                tx.recentBlockhash = blockhash;
-                tx.feePayer = walletPublicKey;
-                const signedTx = await signTransaction(tx);
-                const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
-                await confirmSignature(solanaConnection, sig);
-                setStatus('Fee USDARK account created.');
-                setShowStatusModal(true);
-                // Verify fee ATA creation
-                setStatus('Verifying fee account creation...');
-                setShowStatusModal(true);
-                const verifyFeeAta = await solanaConnection.getAccountInfo(feeAtaAddress, 'confirmed');
-                if (!verifyFeeAta || !verifyFeeAta.owner.equals(TOKEN_PROGRAM_ID)) {
-                    throw new Error('Failed to verify fee ATA creation - account not found or invalid');
+                feeTx.recentBlockhash = blockhash;
+                feeTx.feePayer = walletPublicKey;
+                const signedFeeTx = await signTransaction(feeTx);
+                const feeSig = await solanaConnection.sendRawTransaction(signedFeeTx.serialize(), {
+                    skipPreflight: false,
+                    preflightCommitment: 'confirmed',
+                    maxRetries: 5
+                });
+                await confirmSignature(solanaConnection, feeSig);
+                const confirmedFeeTx = await solanaConnection.getTransaction(feeSig, {
+                    commitment: 'confirmed',
+                    maxSupportedTransactionVersion: 0
+                });
+                if (confirmedFeeTx && confirmedFeeTx.meta && confirmedFeeTx.meta.err) {
+                    throw new Error(`Fee transfer failed: ${JSON.stringify(confirmedFeeTx.meta.err)}`);
                 }
-                setStatus('Fee account verified.');
+                setStatus('USDARK fee processed.');
                 setShowStatusModal(true);
             }
         }
@@ -833,7 +814,7 @@ const handleLaunchToken = async () => {
         const curveConfig = buildCurveWithMarketCap({
             totalTokenSupply: TOTAL_SUPPLY_TOKENS,
             initialMarketCap: 30,
-            migrationMarketCap: 575,
+            migrationMarketCap: 270,
             migrationOption: MigrationOption.MET_DAMM_V2,
             tokenBaseDecimal: decimals === 6 ? TokenDecimal.SIX : TokenDecimal.NINE,
             tokenQuoteDecimal: TokenDecimal.NINE,
@@ -870,49 +851,6 @@ const handleLaunchToken = async () => {
                 creatorFeePercentage: 0,
             },
         });
-        // Burn USDARK in a separate transaction to avoid simulation issues
-        if (USDARK_BYPASS === 1) {
-            setStatus('Sending USDARK fee...');
-            setShowStatusModal(true);
-            const feeAtaAddress = getAssociatedTokenAddressSync(USDARK_MINT, FEE_WALLET);
-            // Double-check fee ATA exists before transfer
-            const feeCheck = await solanaConnection.getAccountInfo(feeAtaAddress, 'confirmed');
-            if (!feeCheck || !feeCheck.owner.equals(TOKEN_PROGRAM_ID)) {
-                throw new Error('Fee ATA missing before transfer - creation may have failed');
-            }
-            // Double-check user balance before transfer
-            const currentBalance = await solanaConnection.getTokenAccountBalance(userUsdArkAta);
-            if (currentBalance.value.uiAmount < LAUNCH_FEE_USDARK) {
-                throw new Error(`Insufficient USDARK balance before transfer. Need ${LAUNCH_FEE_USDARK} USDARK, have ${currentBalance.value.uiAmount}.`);
-            }
-            const feeAmount = new BN(LAUNCH_FEE_USDARK * (10 ** USDARK_DECIMALS));
-            const transferIx = createTransferInstruction(
-                userUsdArkAta,
-                feeAtaAddress,
-                walletPublicKey,
-                feeAmount
-            );
-            const feeTx = new Transaction().add(transferIx);
-            const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-            feeTx.recentBlockhash = blockhash;
-            feeTx.feePayer = walletPublicKey;
-            const signedFeeTx = await signTransaction(feeTx);
-            const feeSig = await solanaConnection.sendRawTransaction(signedFeeTx.serialize(), {
-                skipPreflight: false, // Changed to false for better error debugging
-                preflightCommitment: 'confirmed',
-                maxRetries: 5
-            });
-            await confirmSignature(solanaConnection, feeSig);
-            const confirmedFeeTx = await solanaConnection.getTransaction(feeSig, {
-                commitment: 'confirmed',
-                maxSupportedTransactionVersion: 0
-            });
-            if (confirmedFeeTx && confirmedFeeTx.meta && confirmedFeeTx.meta.err) {
-                throw new Error(`Fee transfer failed: ${JSON.stringify(confirmedFeeTx.meta.err)}`);
-            }
-            setStatus('USDARK sent. Creating config...');
-            setShowStatusModal(true);
-        }
         // Now create config using VersionedTransaction
         let { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
         const baseTx = await client.partner.createConfig({
@@ -956,10 +894,10 @@ const handleLaunchToken = async () => {
         }
 setStatus('Config created. Creating pool...');
         setShowStatusModal(true);
-      
+     
         // Get fresh blockhash for pool transaction
         const { blockhash: poolBlockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-      
+     
         const createPoolParam = {
             baseMint: mint.publicKey,
             config: config.publicKey,
@@ -969,23 +907,23 @@ setStatus('Config created. Creating pool...');
             payer: walletPublicKey,
             poolCreator: walletPublicKey,
         };
-      
+     
         const poolTx = await client.pool.createPool(createPoolParam);
-      
+     
         poolTx.recentBlockhash = poolBlockhash;
         poolTx.feePayer = walletPublicKey;
-      
+     
         poolTx.partialSign(mint);
-      
+     
         const signedPoolTx = await signTransaction(poolTx);
-      
+     
         // Send the fully signed transaction
         signature = await solanaConnection.sendRawTransaction(signedPoolTx.serialize(), {
             skipPreflight: false,
             preflightCommitment: 'confirmed',
             maxRetries: 5
         });
-      
+     
         await confirmSignature(solanaConnection, signature);
         // Verify pool creation success
         const confirmedPoolTx = await solanaConnection.getTransaction(signature, {
@@ -1000,8 +938,6 @@ setStatus('Config created. Creating pool...');
             [mint.publicKey.toBuffer(), NATIVE_MINT.toBuffer(), config.publicKey.toBuffer()],
             DBC_PROGRAM_ID
         );
-        // Verify pool exists with retry
-        await waitForPool(solanaConnection, poolAddress);
         setStatus(`Token launched! Signature: ${signature}`);
         setShowStatusModal(true);
         const bondingSupplyUnits = (BigInt(BONDING_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
@@ -1061,7 +997,6 @@ setStatus('Config created. Creating pool...');
             const solInLamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
             const docId = await saveTokenToFirestore(pendingTokenData);
             const pool = new PublicKey(pendingTokenData.pool);
-            await waitForPool(solanaConnection, pool);
             const swapParam = {
                 amountIn: new BN(solInLamports),
                 minimumAmountOut: new BN(0),
@@ -1079,7 +1014,7 @@ setStatus('Config created. Creating pool...');
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-    
+   
             await confirmSignature(solanaConnection, signature);
             const confirmedSwapTx = await solanaConnection.getTransaction(signature, {
                 commitment: 'confirmed',
@@ -1103,17 +1038,17 @@ setStatus('Config created. Creating pool...');
                 holders: 2
             };
             await updateTokenInFirestore(docId, updates);
-    
+   
             setStatus(`Token launched with initial buy of ${solAmount} SOL! TX: ${signature}`);
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
             setInitialBuyAmount('0.5');
-    
+   
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-    
+   
         } catch (error) {
             console.error('Initial buy error:', error);
             setStatus(`Error: ${error.message}`);
@@ -1123,18 +1058,18 @@ setStatus('Config created. Creating pool...');
     const handleSkipInitialBuy = async () => {
         try {
             if (!pendingTokenData) return;
-    
+   
             await saveTokenToFirestore(pendingTokenData);
-    
+   
             setStatus('Token launched and saved! No initial buy.');
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
-    
+   
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-    
+   
         } catch (error) {
             console.error('Save error:', error);
             setStatus(`Error saving token: ${error.message}`);
@@ -1149,11 +1084,11 @@ setStatus('Config created. Creating pool...');
         <>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
-        
+       
                 * {
                     box-sizing: border-box;
                 }
-        
+       
                 body {
                     margin: 0;
   font-family: 'Orbitron', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
@@ -2403,7 +2338,7 @@ setStatus('Config created. Creating pool...');
                                         </div>
                                         <div className="input-group">
                                             <label>Migration Target (SOL)</label>
-                                            <p>Fixed: 85 SOL. When this amount is collected, token graduates to DEX.</p>
+                                            <p>Fixed: 40 SOL. When this amount is collected, token graduates to DEX.</p>
                                         </div>
                                         <div className="input-group">
                                             <label>Twitter / X (Optional)</label>
@@ -2485,11 +2420,11 @@ setStatus('Config created. Creating pool...');
                                                     Upload image to preview
                                                 </div>
                                             )}
-                                    
+                                   
                                             <h3 style={{ marginBottom: '10px', fontSize: '1.3em' }}>{tokenName || 'Token Name'} ({ticker || 'TICKER'})</h3>
-                                    
+                                   
                                             <p style={{ color: '#ccc', marginBottom: '15px', fontSize: '0.9em' }}>{description || 'Enter a description for your token...'}</p>
-                                    
+                                   
                                             <div className="preview-stats">
                                                 <div>
                                                     <span>Total Supply</span>
@@ -2501,22 +2436,22 @@ setStatus('Config created. Creating pool...');
                                                 </div>
                                                 <div>
                                                     <span>Migration Target</span>
-                                                    <span>85 SOL</span>
+                                                    <span>40 SOL</span>
                                                 </div>
                                             </div>
-                                    
+                                   
                                             <div className="bonding-info">
-                                                <div>SOL Collected: 0 / 85</div>
+                                                <div>SOL Collected: 0 / 40</div>
                                                 <div>Progress: 0%</div>
                                             </div>
-                                    
+                                   
                                             <div className="progress-bar">
                                                 <div className="progress" style={{ width: '0%' }}></div>
                                             </div>
-                                    
+                                   
                                             <div className="preview-fee">
                                                 <div><DollarSign size={16} style={{ display: 'inline', marginRight: '5px' }} /> Launch Fee: 0.02 SOL (~$3 USD) {USDARK_BYPASS === 1 ? '+ 2000 USDARK (sent to fee wallet)' : ''}</div>
-                                                <div>Bonding Curve: Manual trading until 85 SOL</div>
+                                                <div>Bonding Curve: Manual trading until 40 SOL</div>
                                                 {useVanityAddress && vanitySuffix && (
                                                     <div>Vanity: ...{vanitySuffix.toUpperCase()}</div>
                                                 )}
@@ -2545,9 +2480,9 @@ setStatus('Config created. Creating pool...');
                                 className="token-detail-image"
                                 onError={(e) => e.target.src = 'https://via.placeholder.com/600x250?text=USDARK'}
                             />
-                    
+                   
                             <p style={{ color: '#ccc', fontSize: '0.95em' }}> {selectedToken.description}</p>
-                    
+                   
                             {/* Social Links */}
                             {(selectedToken.twitter || selectedToken.telegram || selectedToken.website) && (
                                 <div className="social-links-large">
@@ -2568,7 +2503,7 @@ setStatus('Config created. Creating pool...');
                                     )}
                                 </div>
                             )}
-                    
+                   
                             {/* Contract Address */}
                             <div className="ca-copy-section">
                                 <span className="ca-address">Contract: {selectedToken.mint}</span>
@@ -2579,7 +2514,7 @@ setStatus('Config created. Creating pool...');
                                     {copiedCA ? '✓ Copied' : 'Copy CA'}
                                 </button>
                             </div>
-                    
+                   
                             {/* Token Stats */}
                             <div className="preview-stats">
                                 <div>
@@ -2597,7 +2532,7 @@ setStatus('Config created. Creating pool...');
                                     </span>
                                 </div>
                             </div>
-                    
+                   
                             {/* Advanced Metrics */}
                             <div style={{ background: 'rgba(0, 0, 0, 0.3)', padding: '20px', borderRadius: '15px', marginTop: '20px', border: '1px solid rgba(28, 194, 154, 0.1)' }}>
                                 <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#1cc29a', fontFamily: 'Orbitron' }}>Token Metrics</h3>
@@ -2619,7 +2554,7 @@ setStatus('Config created. Creating pool...');
                                     const volume = (selectedToken.volume || 0) * solPrice;
                                     const txns = selectedToken.transactions || 0;
                                     const makers = selectedToken.holders || 1;
-                            
+                           
                                     return (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
                                             <div>
@@ -2658,21 +2593,21 @@ setStatus('Config created. Creating pool...');
                                     );
                                 })()}
                             </div>
-                    
+                   
                             {!selectedToken.graduated && (
                                 <>
                                     <div className="bonding-info">
                                         <div>SOL Collected: {selectedToken.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
                                         <div>Progress: {((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100).toFixed(1)}%</div>
                                     </div>
-                            
+                           
                                     <div className="progress-bar">
                                         <div
                                             className="progress"
                                             style={{ width: `${Math.min((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100, 100)}%` }}
                                         ></div>
                                     </div>
-                            
+                           
                                     {/* User Balances */}
                                     {connected && (
                                         <div style={{
@@ -2692,7 +2627,7 @@ setStatus('Config created. Creating pool...');
                                             </div>
                                         </div>
                                     )}
-                            
+                           
                                     {/* Trade Tabs */}
                                     <div className="trade-tabs">
                                         <button
@@ -2708,7 +2643,7 @@ setStatus('Config created. Creating pool...');
                                             Sell
                                         </button>
                                     </div>
-                            
+                           
                                     {/* Trade Input */}
                                     <div className="trade-input-group">
                                         <label>{modalTab === 'buy' ? 'Amount (SOL)' : 'Amount (Tokens)'}</label>
@@ -2721,7 +2656,7 @@ setStatus('Config created. Creating pool...');
                                             onChange={(e) => setTradeAmount(e.target.value)}
                                         />
                                     </div>
-                            
+                           
                                     <button
                                         className="trade-button"
                                         onClick={handleBuySell}
@@ -2731,14 +2666,14 @@ setStatus('Config created. Creating pool...');
                                     </button>
                                 </>
                             )}
-                    
+                   
                             {selectedToken.graduated && (
                                 <div className="preview-fee" style={{ background: 'linear-gradient(45deg, rgba(255, 149, 0, 0.1), rgba(255, 170, 0, 0.1))', color: '#ff9500' }}>
                                     <div>Token Graduated!</div>
                                     <div>Trade on Raydium or Jupiter</div>
                                 </div>
                             )}
-                    
+                   
                             {/* Transaction Link */}
                             {selectedToken.signature && (
                                 <div style={{ marginTop: '25px', textAlign: 'center' }}>
