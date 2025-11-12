@@ -133,12 +133,10 @@ const uploadToIPFS = async (imageFile, metadata, tokenName) => {
             imageHash = await uploadToPinata(imageFile, { pinataMetadata: { name: `${tokenName}_image` } });
         }
         metadata.image = imageHash ? `https://ipfs.io/ipfs/${imageHash}` : '';
-  
         // Add social links to metadata
         if (metadata.twitter) metadata.twitter = metadata.twitter;
         if (metadata.telegram) metadata.telegram = metadata.telegram;
         if (metadata.website) metadata.website = metadata.website;
-  
         const metadataHash = await uploadToPinata(metadata, { pinataMetadata: { name: `${tokenName}_metadata` } });
         return `https://ipfs.io/ipfs/${metadataHash}`;
     } catch (error) {
@@ -241,7 +239,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             </div>
             <p className="token-description">{token.description?.substring(0, 100)}{token.description?.length > 100 ? '...' : ''}</p>
             <div className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</div>
-      
+    
             {/* Token Metrics */}
             <div className="token-metrics">
                 <div className="metric-row">
@@ -265,7 +263,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <span>${(token.volume || 0).toFixed(2)}</span>
                 </div>
             </div>
-      
+    
             {!token.graduated && (
                 <>
                     <div className="bonding-info">
@@ -277,7 +275,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     </div>
                 </>
             )}
-      
+    
             <div className="token-stats">
                 <div>
                     <div>Supply</div>
@@ -288,7 +286,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <div>{token.holders || 1}</div>
                 </div>
             </div>
-      
+    
             <button
                 className="buy-button"
                 onClick={(e) => {
@@ -300,6 +298,38 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             </button>
         </div>
     );
+};
+// Custom confirmation function
+const confirmSignature = async (connection, signature, commitment = 'confirmed') => {
+  let start = Date.now();
+  const timeout = 60 * 1000;
+  while (Date.now() - start < timeout) {
+    const statuses = await connection.getSignatureStatuses([signature]);
+    const status = statuses && statuses.value[0];
+    if (status) {
+      if (status.err) {
+        throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+      }
+      if (status.confirmationStatus === commitment || status.confirmationStatus === 'finalized') {
+        return status;
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  throw new Error('Transaction confirmation timeout');
+};
+// Wait for pool function
+const waitForPool = async (connection, poolAddress, maxAttempts = 30) => {
+  for (let i = 0; i < maxAttempts; i++) {
+    const info = await connection.getAccountInfo(poolAddress, 'confirmed');
+    if (info && info.owner.equals(DBC_PROGRAM_ID)) {
+      console.log(`Pool verified on attempt ${i + 1}`);
+      return true;
+    }
+    console.log(`Pool not ready on attempt ${i + 1}, waiting...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  throw new Error('Pool not found after waiting');
 };
 // Main App
 function App() {
@@ -395,14 +425,18 @@ function App() {
         const q = query(tokensRef, orderBy('timestamp', 'desc'));
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const tokens = [];
+            const uniqueMints = new Set();
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
                 data.tokensSoldUnits = data.tokensSoldUnits || '0';
-                tokens.push({ id: doc.id, ...data });
+                if (!uniqueMints.has(data.mint)) {
+                    uniqueMints.add(data.mint);
+                    tokens.push({ id: doc.id, ...data });
+                }
             });
             setCreatedTokens(tokens);
             setIsLoadingTokens(false);
-            console.log(`Loaded ${tokens.length} tokens from Firestore`);
+            console.log(`Loaded ${tokens.length} unique tokens from Firestore`);
         }, (error) => {
             console.error('Error loading tokens:', error);
             setStatus('Failed to load tokens from database');
@@ -538,19 +572,19 @@ function App() {
             setSelectedToken(token);
             setShowModal(true);
             setModalTab('buy');
-      
+    
             // Fetch user balances
             if (connected && walletPublicKey && solanaConnection) {
                 try {
                     // Get SOL balance
                     const solBal = await solanaConnection.getBalance(walletPublicKey);
                     setUserSolBalance(solBal / LAMPORTS_PER_SOL);
-              
+            
                     // Get token balance
                     const mint = new PublicKey(token.mint);
                     const userATA = getAssociatedTokenAddressSync(mint, walletPublicKey);
                     const accountInfo = await solanaConnection.getAccountInfo(userATA);
-              
+            
                     if (accountInfo) {
                         const tokenAccountInfo = await solanaConnection.getTokenAccountBalance(userATA);
                         setUserTokenBalance(parseFloat(tokenAccountInfo.value.uiAmount || 0));
@@ -594,9 +628,9 @@ function App() {
         setIsSending(true);
         setStatus(`Preparing ${modalTab}...`);
         setShowStatusModal(true);
-  
         try {
             const pool = new PublicKey(selectedToken.pool);
+            await waitForPool(solanaConnection, pool);
             let amountIn;
             let swapBaseForQuote;
             if (modalTab === 'buy') {
@@ -617,12 +651,12 @@ function App() {
                 );
                 if (createATAIx) {
                     const tx = new Transaction().add(createATAIx);
-                    const { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
+                    const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
                     tx.recentBlockhash = blockhash;
                     tx.feePayer = walletPublicKey;
                     const signedTx = await signTransaction(tx);
                     const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
-                    await solanaConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+                    await confirmSignature(solanaConnection, sig);
                 }
             }
             const swapParam = {
@@ -634,7 +668,7 @@ function App() {
                 referralTokenAccount: null,
             };
             const swapTransaction = await client.pool.swap(swapParam);
-            const { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
+            const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
             swapTransaction.recentBlockhash = blockhash;
             swapTransaction.feePayer = walletPublicKey;
             const signedTx = await signTransaction(swapTransaction);
@@ -642,12 +676,8 @@ function App() {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-      
-            await solanaConnection.confirmTransaction({
-                signature,
-                blockhash,
-                lastValidBlockHeight
-            }, 'confirmed');
+    
+            await confirmSignature(solanaConnection, signature);
             const confirmedTradeTx = await solanaConnection.getTransaction(signature, {
                 commitment: 'confirmed',
                 maxSupportedTransactionVersion: 0
@@ -725,12 +755,12 @@ const handleLaunchToken = async () => {
                 setStatus('Creating USDARK account...');
                 setShowStatusModal(true);
                 const tx = new Transaction().add(createATAIx);
-                const { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
+                const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = walletPublicKey;
                 const signedTx = await signTransaction(tx);
                 const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
-                await solanaConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+                await confirmSignature(solanaConnection, sig);
                 setStatus('USDARK account created. Checking balance...');
                 setShowStatusModal(true);
             } else {
@@ -753,12 +783,12 @@ const handleLaunchToken = async () => {
                 setStatus('Creating fee USDARK account...');
                 setShowStatusModal(true);
                 const tx = new Transaction().add(createFeeATAIx);
-                const { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
+                const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
                 tx.recentBlockhash = blockhash;
                 tx.feePayer = walletPublicKey;
                 const signedTx = await signTransaction(tx);
                 const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
-                await solanaConnection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
+                await confirmSignature(solanaConnection, sig);
                 setStatus('Fee USDARK account created.');
                 setShowStatusModal(true);
                 // Verify fee ATA creation
@@ -863,8 +893,8 @@ const handleLaunchToken = async () => {
                 feeAmount
             );
             const feeTx = new Transaction().add(transferIx);
-            const { blockhash: feeBlockhash, lastValidBlockHeight: feeLastValid } = await solanaConnection.getLatestBlockhash('confirmed');
-            feeTx.recentBlockhash = feeBlockhash;
+            const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+            feeTx.recentBlockhash = blockhash;
             feeTx.feePayer = walletPublicKey;
             const signedFeeTx = await signTransaction(feeTx);
             const feeSig = await solanaConnection.sendRawTransaction(signedFeeTx.serialize(), {
@@ -872,11 +902,7 @@ const handleLaunchToken = async () => {
                 preflightCommitment: 'confirmed',
                 maxRetries: 5
             });
-            await solanaConnection.confirmTransaction({
-                signature: feeSig,
-                blockhash: feeBlockhash,
-                lastValidBlockHeight: feeLastValid
-            }, 'confirmed');
+            await confirmSignature(solanaConnection, feeSig);
             const confirmedFeeTx = await solanaConnection.getTransaction(feeSig, {
                 commitment: 'confirmed',
                 maxSupportedTransactionVersion: 0
@@ -888,8 +914,8 @@ const handleLaunchToken = async () => {
             setShowStatusModal(true);
         }
         // Now create config using VersionedTransaction
-        let { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
-        const configInstructions = await client.partner._createConfigIx({
+        let { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+        const baseTx = await client.partner.createConfig({
             config: config.publicKey,
             feeClaimer: FEE_WALLET,
             leftoverReceiver: FEE_WALLET,
@@ -902,25 +928,23 @@ const handleLaunchToken = async () => {
             toPubkey: FEE_WALLET,
             lamports: BASE_FEE,
         });
-        const allConfigInstructions = [...configInstructions, feeTransferIx];
-        const configMessageV0 = new TransactionMessage({
+        baseTx.add(feeTransferIx);
+        baseTx.recentBlockhash = blockhash;
+        baseTx.feePayer = walletPublicKey;
+        const messageV0 = new TransactionMessage({
             payerKey: walletPublicKey,
             recentBlockhash: blockhash,
-            instructions: allConfigInstructions,
+            instructions: baseTx.instructions,
         }).compileToV0Message();
-        const unsignedConfigTx = new VersionedTransaction(configMessageV0);
+        const unsignedConfigTx = new VersionedTransaction(messageV0);
+        unsignedConfigTx.sign([config]);
         let signedConfigTx = await signTransaction(unsignedConfigTx);
-        signedConfigTx.sign([config]);
         let signature = await solanaConnection.sendRawTransaction(signedConfigTx.serialize(), {
             skipPreflight: false,
             preflightCommitment: 'confirmed',
             maxRetries: 5
         });
-        await solanaConnection.confirmTransaction({
-            signature,
-            blockhash,
-            lastValidBlockHeight
-        }, 'confirmed');
+        await confirmSignature(solanaConnection, signature);
         // Verify config creation success
         const confirmedConfigTx = await solanaConnection.getTransaction(signature, {
             commitment: 'confirmed',
@@ -930,9 +954,12 @@ const handleLaunchToken = async () => {
             console.error('Config creation failed. Logs:', confirmedConfigTx.meta.logMessages);
             throw new Error(`Config creation failed: ${JSON.stringify(confirmedConfigTx.meta.err)}`);
         }
-        setStatus('Config created. Creating pool...');
+setStatus('Config created. Creating pool...');
         setShowStatusModal(true);
-        const { blockhash: poolBlockhash, lastValidBlockHeight: poolLastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
+      
+        // Get fresh blockhash for pool transaction
+        const { blockhash: poolBlockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+      
         const createPoolParam = {
             baseMint: mint.publicKey,
             config: config.publicKey,
@@ -942,25 +969,24 @@ const handleLaunchToken = async () => {
             payer: walletPublicKey,
             poolCreator: walletPublicKey,
         };
-        const poolInstructions = await client.pool._createPoolIx(createPoolParam);
-        const poolMessageV0 = new TransactionMessage({
-            payerKey: walletPublicKey,
-            recentBlockhash: poolBlockhash,
-            instructions: poolInstructions,
-        }).compileToV0Message();
-        const unsignedPoolTx = new VersionedTransaction(poolMessageV0);
-        let signedPoolTx = await signTransaction(unsignedPoolTx);
-        signedPoolTx.sign([mint]);
+      
+        const poolTx = await client.pool.createPool(createPoolParam);
+      
+        poolTx.recentBlockhash = poolBlockhash;
+        poolTx.feePayer = walletPublicKey;
+      
+        poolTx.partialSign(mint);
+      
+        const signedPoolTx = await signTransaction(poolTx);
+      
+        // Send the fully signed transaction
         signature = await solanaConnection.sendRawTransaction(signedPoolTx.serialize(), {
             skipPreflight: false,
             preflightCommitment: 'confirmed',
             maxRetries: 5
         });
-        await solanaConnection.confirmTransaction({
-            signature,
-            blockhash: poolBlockhash,
-            lastValidBlockHeight: poolLastValidBlockHeight
-        }, 'confirmed');
+      
+        await confirmSignature(solanaConnection, signature);
         // Verify pool creation success
         const confirmedPoolTx = await solanaConnection.getTransaction(signature, {
             commitment: 'confirmed',
@@ -974,23 +1000,8 @@ const handleLaunchToken = async () => {
             [mint.publicKey.toBuffer(), NATIVE_MINT.toBuffer(), config.publicKey.toBuffer()],
             DBC_PROGRAM_ID
         );
-        // Verify pool exists with retry (patched)
-        console.log(`Expected pool PDA: ${poolAddress.toBase58()}`); // Debug
-        let poolInfo = null;
-        for (let i = 0; i < 10; i++) {
-            poolInfo = await solanaConnection.getAccountInfo(poolAddress, 'confirmed'); // Patched commitment
-            if (poolInfo && poolInfo.owner.equals(DBC_PROGRAM_ID)) {
-                console.log(`Pool verified on attempt ${i + 1}: ${poolAddress.toBase58()}`); // Debug
-                break;
-            }
-            console.log(`Pool not ready on attempt ${i + 1}, waiting...`); // Debug
-            await new Promise(resolve => setTimeout(resolve, 5000)); // Patched wait time
-        }
-        if (!poolInfo || !poolInfo.owner.equals(DBC_PROGRAM_ID)) {
-            console.warn(`Pool verification timed out for ${poolAddress.toBase58()}, but tx succeeded. Proceeding with caution.`);
-            // Uncomment below for strict mode (may cause false failures on devnet)
-            // throw new Error('Pool account not found or invalid after creation');
-        }
+        // Verify pool exists with retry
+        await waitForPool(solanaConnection, poolAddress);
         setStatus(`Token launched! Signature: ${signature}`);
         setShowStatusModal(true);
         const bondingSupplyUnits = (BigInt(BONDING_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
@@ -1021,13 +1032,10 @@ const handleLaunchToken = async () => {
             transactions: 0,
             holders: 1
         };
-  
         setPendingTokenData(newToken);
         setShowInitialBuyModal(true);
-  
     } catch (error) {
         console.error('Launch error:', error);
-  
         // Enhanced error logging
         if (error.logs) {
             console.error('Transaction logs:', error.logs);
@@ -1053,6 +1061,7 @@ const handleLaunchToken = async () => {
             const solInLamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
             const docId = await saveTokenToFirestore(pendingTokenData);
             const pool = new PublicKey(pendingTokenData.pool);
+            await waitForPool(solanaConnection, pool);
             const swapParam = {
                 amountIn: new BN(solInLamports),
                 minimumAmountOut: new BN(0),
@@ -1062,7 +1071,7 @@ const handleLaunchToken = async () => {
                 referralTokenAccount: null,
             };
             const swapTx = await client.pool.swap(swapParam);
-            const { blockhash, lastValidBlockHeight } = await solanaConnection.getLatestBlockhash('confirmed');
+            const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
             swapTx.recentBlockhash = blockhash;
             swapTx.feePayer = walletPublicKey;
             const signedTx = await signTransaction(swapTx);
@@ -1070,12 +1079,8 @@ const handleLaunchToken = async () => {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-      
-            await solanaConnection.confirmTransaction({
-                signature,
-                blockhash,
-                lastValidBlockHeight
-            }, 'confirmed');
+    
+            await confirmSignature(solanaConnection, signature);
             const confirmedSwapTx = await solanaConnection.getTransaction(signature, {
                 commitment: 'confirmed',
                 maxSupportedTransactionVersion: 0
@@ -1098,17 +1103,17 @@ const handleLaunchToken = async () => {
                 holders: 2
             };
             await updateTokenInFirestore(docId, updates);
-      
+    
             setStatus(`Token launched with initial buy of ${solAmount} SOL! TX: ${signature}`);
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
             setInitialBuyAmount('0.5');
-      
+    
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-      
+    
         } catch (error) {
             console.error('Initial buy error:', error);
             setStatus(`Error: ${error.message}`);
@@ -1118,18 +1123,18 @@ const handleLaunchToken = async () => {
     const handleSkipInitialBuy = async () => {
         try {
             if (!pendingTokenData) return;
-      
+    
             await saveTokenToFirestore(pendingTokenData);
-      
+    
             setStatus('Token launched and saved! No initial buy.');
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
-      
+    
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-      
+    
         } catch (error) {
             console.error('Save error:', error);
             setStatus(`Error saving token: ${error.message}`);
@@ -1137,18 +1142,18 @@ const handleLaunchToken = async () => {
         }
     };
     const requireUsdark = USDARK_BYPASS === 1;
-    const enoughSol = userSolBalance >= 0.1; // Increased buffer for multiple tx fees + rent exemptions (USDARK tx, config tx, pool tx including mint creation ~0.002 SOL rent)
+    const enoughSol = userSolBalance >= 0.02; // Increased buffer for multiple tx fees + rent exemptions (USDARK tx, config tx, pool tx including mint creation ~0.002 SOL rent)
     const enoughUsdark = !requireUsdark || userUsdarkBalance >= LAUNCH_FEE_USDARK;
     const formComplete = tokenName && ticker && description && imageFile;
     return (
         <>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
-          
+        
                 * {
                     box-sizing: border-box;
                 }
-          
+        
                 body {
                     margin: 0;
   font-family: 'Orbitron', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
@@ -2459,7 +2464,7 @@ const handleLaunchToken = async () => {
                                         >
                                             {isSending ? 'Launching...' : USDARK_BYPASS === 1 ? 'Launch Token (0.02 SOL + 2000 USDARK)' : 'Launch Token (0.02 SOL)'}
                                         </button>
-                                        {!enoughSol && <p style={{color: 'red'}}>Insufficient SOL balance (need at least 0.1 SOL for fees and rent)</p>}
+                                        {!enoughSol && <p style={{color: 'red'}}>Insufficient SOL balance (need at least 0.05 SOL for fees and rent)</p>}
                                         {requireUsdark && !enoughUsdark && <p style={{color: 'red'}}>Insufficient USDARK balance (need at least 2000 USDARK)</p>}
                                         {!formComplete && <p style={{color: 'red'}}>Please complete all required fields</p>}
                                     </form>
@@ -2480,11 +2485,11 @@ const handleLaunchToken = async () => {
                                                     Upload image to preview
                                                 </div>
                                             )}
-                                      
+                                    
                                             <h3 style={{ marginBottom: '10px', fontSize: '1.3em' }}>{tokenName || 'Token Name'} ({ticker || 'TICKER'})</h3>
-                                      
+                                    
                                             <p style={{ color: '#ccc', marginBottom: '15px', fontSize: '0.9em' }}>{description || 'Enter a description for your token...'}</p>
-                                      
+                                    
                                             <div className="preview-stats">
                                                 <div>
                                                     <span>Total Supply</span>
@@ -2499,16 +2504,16 @@ const handleLaunchToken = async () => {
                                                     <span>85 SOL</span>
                                                 </div>
                                             </div>
-                                      
+                                    
                                             <div className="bonding-info">
                                                 <div>SOL Collected: 0 / 85</div>
                                                 <div>Progress: 0%</div>
                                             </div>
-                                      
+                                    
                                             <div className="progress-bar">
                                                 <div className="progress" style={{ width: '0%' }}></div>
                                             </div>
-                                      
+                                    
                                             <div className="preview-fee">
                                                 <div><DollarSign size={16} style={{ display: 'inline', marginRight: '5px' }} /> Launch Fee: 0.02 SOL (~$3 USD) {USDARK_BYPASS === 1 ? '+ 2000 USDARK (sent to fee wallet)' : ''}</div>
                                                 <div>Bonding Curve: Manual trading until 85 SOL</div>
@@ -2540,9 +2545,9 @@ const handleLaunchToken = async () => {
                                 className="token-detail-image"
                                 onError={(e) => e.target.src = 'https://via.placeholder.com/600x250?text=USDARK'}
                             />
-                      
+                    
                             <p style={{ color: '#ccc', fontSize: '0.95em' }}> {selectedToken.description}</p>
-                      
+                    
                             {/* Social Links */}
                             {(selectedToken.twitter || selectedToken.telegram || selectedToken.website) && (
                                 <div className="social-links-large">
@@ -2563,7 +2568,7 @@ const handleLaunchToken = async () => {
                                     )}
                                 </div>
                             )}
-                      
+                    
                             {/* Contract Address */}
                             <div className="ca-copy-section">
                                 <span className="ca-address">Contract: {selectedToken.mint}</span>
@@ -2574,7 +2579,7 @@ const handleLaunchToken = async () => {
                                     {copiedCA ? '✓ Copied' : 'Copy CA'}
                                 </button>
                             </div>
-                      
+                    
                             {/* Token Stats */}
                             <div className="preview-stats">
                                 <div>
@@ -2592,7 +2597,7 @@ const handleLaunchToken = async () => {
                                     </span>
                                 </div>
                             </div>
-                      
+                    
                             {/* Advanced Metrics */}
                             <div style={{ background: 'rgba(0, 0, 0, 0.3)', padding: '20px', borderRadius: '15px', marginTop: '20px', border: '1px solid rgba(28, 194, 154, 0.1)' }}>
                                 <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#1cc29a', fontFamily: 'Orbitron' }}>Token Metrics</h3>
@@ -2614,7 +2619,7 @@ const handleLaunchToken = async () => {
                                     const volume = (selectedToken.volume || 0) * solPrice;
                                     const txns = selectedToken.transactions || 0;
                                     const makers = selectedToken.holders || 1;
-                              
+                            
                                     return (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
                                             <div>
@@ -2653,21 +2658,21 @@ const handleLaunchToken = async () => {
                                     );
                                 })()}
                             </div>
-                      
+                    
                             {!selectedToken.graduated && (
                                 <>
                                     <div className="bonding-info">
                                         <div>SOL Collected: {selectedToken.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
                                         <div>Progress: {((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100).toFixed(1)}%</div>
                                     </div>
-                              
+                            
                                     <div className="progress-bar">
                                         <div
                                             className="progress"
                                             style={{ width: `${Math.min((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100, 100)}%` }}
                                         ></div>
                                     </div>
-                              
+                            
                                     {/* User Balances */}
                                     {connected && (
                                         <div style={{
@@ -2687,7 +2692,7 @@ const handleLaunchToken = async () => {
                                             </div>
                                         </div>
                                     )}
-                              
+                            
                                     {/* Trade Tabs */}
                                     <div className="trade-tabs">
                                         <button
@@ -2703,7 +2708,7 @@ const handleLaunchToken = async () => {
                                             Sell
                                         </button>
                                     </div>
-                              
+                            
                                     {/* Trade Input */}
                                     <div className="trade-input-group">
                                         <label>{modalTab === 'buy' ? 'Amount (SOL)' : 'Amount (Tokens)'}</label>
@@ -2716,7 +2721,7 @@ const handleLaunchToken = async () => {
                                             onChange={(e) => setTradeAmount(e.target.value)}
                                         />
                                     </div>
-                              
+                            
                                     <button
                                         className="trade-button"
                                         onClick={handleBuySell}
@@ -2726,14 +2731,14 @@ const handleLaunchToken = async () => {
                                     </button>
                                 </>
                             )}
-                      
+                    
                             {selectedToken.graduated && (
                                 <div className="preview-fee" style={{ background: 'linear-gradient(45deg, rgba(255, 149, 0, 0.1), rgba(255, 170, 0, 0.1))', color: '#ff9500' }}>
                                     <div>Token Graduated!</div>
                                     <div>Trade on Raydium or Jupiter</div>
                                 </div>
                             )}
-                      
+                    
                             {/* Transaction Link */}
                             {selectedToken.signature && (
                                 <div style={{ marginTop: '25px', textAlign: 'center' }}>
