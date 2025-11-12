@@ -44,9 +44,9 @@ const NETWORKS = {
         'https://dawn-devnet.solana.com'
     ],
     'mainnet': [
-        'https://rpc.ankr.com/solana',
-        'https://solana-rpc.publicnode.com',
+        'https://solana-mainnet.rpc.extrnode.com',
         'https://api.mainnet-beta.solana.com',
+        'https://solana-rpc.publicnode.com',
         'https://solana-mainnet.g.alchemy.com/v2/demo', // Additional fallback
         'https://mainnet.rpcpool.com' // Additional fallback
     ]
@@ -129,16 +129,19 @@ const uploadToPinata = async (data, options = { pinataMetadata: { name: 'metadat
 const uploadToIPFS = async (imageFile, metadata, tokenName) => {
     try {
         let imageHash = '';
+        let imageUrl = '';
         if (imageFile) {
             imageHash = await uploadToPinata(imageFile, { pinataMetadata: { name: `${tokenName}_image` } });
+            imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
         }
-        metadata.image = imageHash ? `https://ipfs.io/ipfs/${imageHash}` : '';
+        metadata.image = imageUrl;
         // Add social links to metadata
         if (metadata.twitter) metadata.twitter = metadata.twitter;
         if (metadata.telegram) metadata.telegram = metadata.telegram;
         if (metadata.website) metadata.website = metadata.website;
         const metadataHash = await uploadToPinata(metadata, { pinataMetadata: { name: `${tokenName}_metadata` } });
-        return `https://ipfs.io/ipfs/${metadataHash}`;
+        const metadataUri = `https://ipfs.io/ipfs/${metadataHash}`;
+        return { metadataUri, imageUrl };
     } catch (error) {
         console.error('Pinata upload error:', error);
         throw new Error(`IPFS upload failed: ${error.message}`);
@@ -239,7 +242,6 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             </div>
             <p className="token-description">{token.description?.substring(0, 100)}{token.description?.length > 100 ? '...' : ''}</p>
             <div className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</div>
-   
             {/* Token Metrics */}
             <div className="token-metrics">
                 <div className="metric-row">
@@ -263,7 +265,6 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <span>${(token.volume || 0).toFixed(2)}</span>
                 </div>
             </div>
-   
             {!token.graduated && (
                 <>
                     <div className="bonding-info">
@@ -275,7 +276,6 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     </div>
                 </>
             )}
-   
             <div className="token-stats">
                 <div>
                     <div>Supply</div>
@@ -286,7 +286,6 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                     <div>{token.holders || 1}</div>
                 </div>
             </div>
-   
             <button
                 className="buy-button"
                 onClick={(e) => {
@@ -301,22 +300,22 @@ const TokenCard = ({ token, onAction, solPrice }) => {
 };
 // Custom confirmation function
 const confirmSignature = async (connection, signature, commitment = 'confirmed') => {
-  let start = Date.now();
-  const timeout = 60 * 1000;
-  while (Date.now() - start < timeout) {
-    const statuses = await connection.getSignatureStatuses([signature]);
-    const status = statuses && statuses.value[0];
-    if (status) {
-      if (status.err) {
-        throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
-      }
-      if (status.confirmationStatus === commitment || status.confirmationStatus === 'finalized') {
-        return status;
-      }
+    let start = Date.now();
+    const timeout = 60 * 1000;
+    while (Date.now() - start < timeout) {
+        const statuses = await connection.getSignatureStatuses([signature]);
+        const status = statuses && statuses.value[0];
+        if (status) {
+            if (status.err) {
+                throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+            }
+            if (status.confirmationStatus === commitment || status.confirmationStatus === 'finalized') {
+                return status;
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 2000));
     }
-    await new Promise(resolve => setTimeout(resolve, 2000));
-  }
-  throw new Error('Transaction confirmation timeout');
+    throw new Error('Transaction confirmation timeout');
 };
 // Main App
 function App() {
@@ -358,11 +357,15 @@ function App() {
     const [selectedToken, setSelectedToken] = useState(null);
     const [modalTab, setModalTab] = useState('buy');
     const [tradeAmount, setTradeAmount] = useState('');
+    const [slippage, setSlippage] = useState(0.5);
+    const [outputAmount, setOutputAmount] = useState('');
     const [copiedCA, setCopiedCA] = useState(false);
     const [userTokenBalance, setUserTokenBalance] = useState(0);
     const [userSolBalance, setUserSolBalance] = useState(0);
     const [userUsdarkBalance, setUserUsdarkBalance] = useState(0);
     const [solPrice, setSolPrice] = useState(150); // Default SOL price in USD
+    const [isFetchingQuote, setIsFetchingQuote] = useState(false);
+    const [tradeError, setTradeError] = useState('');
     // Initial Buy Modal States
     const [showInitialBuyModal, setShowInitialBuyModal] = useState(false);
     const [initialBuyAmount, setInitialBuyAmount] = useState('0.5');
@@ -487,6 +490,58 @@ function App() {
         };
         fetchBalances();
     }, [connected, walletPublicKey, solanaConnection]);
+    // Output calculation for trade modal
+    useEffect(() => {
+        const updateOutput = async () => {
+            if (!selectedToken || !tradeAmount || parseFloat(tradeAmount) <= 0) {
+                setOutputAmount('');
+                setTradeError('');
+                return;
+            }
+            if (selectedToken.graduated) {
+                setIsFetchingQuote(true);
+                try {
+                    const inputMint = modalTab === 'buy' ? NATIVE_MINT.toString() : selectedToken.mint;
+                    const outputMint = modalTab === 'buy' ? selectedToken.mint : NATIVE_MINT.toString();
+                    const inputDec = modalTab === 'buy' ? 9 : selectedToken.decimals;
+                    const amountIn = Math.floor(parseFloat(tradeAmount) * (10 ** inputDec));
+                    const res = await axios.get(`https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amountIn}&slippageBps=${Math.floor(slippage * 100)}`);
+                    const quote = res.data;
+                    const outputDec = modalTab === 'buy' ? selectedToken.decimals : 9;
+                    const out = parseFloat(quote.outAmount) / (10 ** outputDec);
+                    setOutputAmount(out.toFixed(6));
+                    setTradeError('');
+                } catch (e) {
+                    setTradeError(e.message);
+                    setOutputAmount('');
+                } finally {
+                    setIsFetchingQuote(false);
+                }
+            } else {
+                setIsFetchingQuote(false);
+                const amount = parseFloat(tradeAmount);
+                const solReservesLamports = Math.floor(selectedToken.solCollected * LAMPORTS_PER_SOL);
+                const tokensSoldUnits = BigInt(selectedToken.tokensSoldUnits || '0');
+                const bondingUnits = BigInt(selectedToken.bondingSupplyUnits);
+                const remainingUnits = bondingUnits - tokensSoldUnits;
+                const dec = selectedToken.decimals;
+                let outUi = 0;
+                if (modalTab === 'buy') {
+                    const solInLamports = Math.floor(amount * LAMPORTS_PER_SOL);
+                    const tokensOut = calculateTokensOut(solInLamports, solReservesLamports, remainingUnits.toString(), dec);
+                    outUi = Number(tokensOut) / (10 ** dec);
+                } else {
+                    const tokensInUnits = Math.floor(amount * (10 ** dec));
+                    const solOutLamports = calculateSolOut(tokensInUnits, solReservesLamports, remainingUnits.toString(), dec);
+                    outUi = Number(solOutLamports) / LAMPORTS_PER_SOL;
+                }
+                setOutputAmount(outUi.toFixed(6));
+                setTradeError('');
+            }
+        };
+        const timeoutId = setTimeout(updateOutput, 300);
+        return () => clearTimeout(timeoutId);
+    }, [tradeAmount, modalTab, selectedToken, slippage]);
     // Helper function to save token to Firestore
     const saveTokenToFirestore = async (tokenData) => {
         try {
@@ -559,19 +614,22 @@ function App() {
             setSelectedToken(token);
             setShowModal(true);
             setModalTab('buy');
-   
+            setTradeAmount('');
+            setOutputAmount('');
+            setTradeError('');
+            setSlippage(0.5);
             // Fetch user balances
             if (connected && walletPublicKey && solanaConnection) {
                 try {
                     // Get SOL balance
                     const solBal = await solanaConnection.getBalance(walletPublicKey);
                     setUserSolBalance(solBal / LAMPORTS_PER_SOL);
-           
+
                     // Get token balance
                     const mint = new PublicKey(token.mint);
                     const userATA = getAssociatedTokenAddressSync(mint, walletPublicKey);
                     const accountInfo = await solanaConnection.getAccountInfo(userATA);
-           
+
                     if (accountInfo) {
                         const tokenAccountInfo = await solanaConnection.getTokenAccountBalance(userATA);
                         setUserTokenBalance(parseFloat(tokenAccountInfo.value.uiAmount || 0));
@@ -596,92 +654,154 @@ function App() {
         setCopiedCA(true);
         setTimeout(() => setCopiedCA(false), 2000);
     };
-    const handleBuySell = async () => {
-        if (!connected || !walletPublicKey || !solanaConnection || !selectedToken || !client) {
-            setStatus('Wallet not connected or client not ready');
-            setShowStatusModal(true);
-            return;
+    const trySwap = async (client, swapParam, maxRetries = 10, retryDelay = 1000) => {
+        let attempt = 0;
+        while (attempt < maxRetries) {
+            try {
+                return await client.pool.swap(swapParam);
+            } catch (error) {
+                if (error.message.includes('Pool not found')) {
+                    attempt++;
+                    console.log(`Pool not found, retrying attempt ${attempt}/${maxRetries}...`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                } else {
+                    throw error;
+                }
+            }
         }
-        if (!tradeAmount || parseFloat(tradeAmount) <= 0) {
+        throw new Error('Max retries reached for swap operation');
+    };
+    // ---------------------------------------------------------------
+    //  NEW handleTrade (replace the old one with this block)
+    // ---------------------------------------------------------------
+    const handleTrade = async () => {
+        if (
+            !connected ||
+            !walletPublicKey ||
+            !selectedToken ||
+            !tradeAmount ||
+            parseFloat(tradeAmount) <= 0
+        ) {
             setStatus('Enter a valid amount');
             setShowStatusModal(true);
             return;
         }
-        if (selectedToken.graduated) {
-            setStatus('Token graduated! Use Raydium or Jupiter to trade.');
+
+        const inputBal = modalTab === 'buy' ? userSolBalance : userTokenBalance;
+        if (parseFloat(tradeAmount) > inputBal) {
+            setStatus('Insufficient balance');
             setShowStatusModal(true);
             return;
         }
+
         setIsSending(true);
-        setStatus(`Preparing ${modalTab}...`);
+        setStatus(`Processing ${modalTab}...`);
         setShowStatusModal(true);
+
         try {
-            const pool = new PublicKey(selectedToken.pool);
-            let amountIn;
-            let swapBaseForQuote;
-            if (modalTab === 'buy') {
-                amountIn = new BN(Math.floor(parseFloat(tradeAmount) * LAMPORTS_PER_SOL));
-                swapBaseForQuote = false;
-            } else {
-                amountIn = new BN(Math.floor(parseFloat(tradeAmount) * Math.pow(10, selectedToken.decimals)));
-                swapBaseForQuote = true;
-            }
-            // Ensure ATA exists for buy
-            if (modalTab === 'buy') {
-                const mint = new PublicKey(selectedToken.mint);
-                const { address: userATA, instruction: createATAIx } = await safeGetOrCreateATA(
-                    solanaConnection,
-                    walletPublicKey,
-                    mint,
-                    walletPublicKey
-                );
-                if (createATAIx) {
-                    const tx = new Transaction().add(createATAIx);
-                    const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-                    tx.recentBlockhash = blockhash;
-                    tx.feePayer = walletPublicKey;
-                    const signedTx = await signTransaction(tx);
-                    const sig = await solanaConnection.sendRawTransaction(signedTx.serialize());
-                    await confirmSignature(solanaConnection, sig);
-                }
-            }
-            const swapParam = {
-                amountIn,
-                minimumAmountOut: new BN(0),
-                swapBaseForQuote,
-                owner: walletPublicKey,
-                pool,
-                referralTokenAccount: null,
-            };
-            const swapTransaction = await client.pool.swap(swapParam);
-            const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-            swapTransaction.recentBlockhash = blockhash;
-            swapTransaction.feePayer = walletPublicKey;
-            const signedTx = await signTransaction(swapTransaction);
-            const signature = await solanaConnection.sendRawTransaction(signedTx.serialize(), {
-                skipPreflight: false,
-                preflightCommitment: 'confirmed'
+            // ---------- 1. Mint & decimals ----------
+            const isUsdark = selectedToken.mint === USDARK_MINT.toBase58();
+
+            const inputMint =
+                modalTab === 'buy' ? NATIVE_MINT.toString() : selectedToken.mint;
+            const outputMint =
+                modalTab === 'buy' ? selectedToken.mint : NATIVE_MINT.toString();
+
+            const inputDec =
+                modalTab === 'buy'
+                    ? 9
+                    : isUsdark
+                        ? 6
+                        : selectedToken.decimals;
+            const outputDec =
+                modalTab === 'buy'
+                    ? isUsdark
+                        ? 6
+                        : selectedToken.decimals
+                    : 9;
+
+            const amountInLamports = Math.floor(
+                parseFloat(tradeAmount) * Math.pow(10, inputDec)
+            );
+            if (amountInLamports <= 0) throw new Error('Invalid amount');
+
+            // ---------- 2. Quote (lite endpoint) ----------
+            const quoteParams = new URLSearchParams({
+                inputMint,
+                outputMint,
+                amount: amountInLamports.toString(),
+                slippageBps: Math.floor(slippage * 100).toString(),
             });
-   
-            await confirmSignature(solanaConnection, signature);
-            const confirmedTradeTx = await solanaConnection.getTransaction(signature, {
-                commitment: 'confirmed',
-                maxSupportedTransactionVersion: 0
-            });
-            if (confirmedTradeTx && confirmedTradeTx.meta && confirmedTradeTx.meta.err) {
-                console.error('Trade failed. Logs:', confirmedTradeTx.meta.logMessages);
-                throw new Error(`Trade failed: ${JSON.stringify(confirmedTradeTx.meta.err)}`);
+            const quoteRes = await fetch(
+                `https://lite-api.jup.ag/swap/v1/quote?${quoteParams}`
+            );
+            if (!quoteRes.ok) {
+                const txt = await quoteRes.text();
+                throw new Error(`Quote error: ${quoteRes.status} – ${txt}`);
             }
-            setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${signature}`);
-            setShowStatusModal(true);
-            // The onAccountChange will update the Firestore
+            const quote = await quoteRes.json();
+
+            // optional UI – show out-amount while waiting for the swap tx
+            const outUi = parseFloat(quote.outAmount) / Math.pow(10, outputDec);
+            setOutputAmount(outUi.toFixed(6));
+
+            // ---------- 3. Swap transaction ----------
+            const swapRes = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    quoteResponse: quote,
+                    userPublicKey: walletPublicKey.toString(),
+                    wrapAndUnwrapSol: true,
+                    dynamicComputeUnitLimit: true,
+                    prioritizationFeeLamports: 'auto',
+                }),
+            });
+            if (!swapRes.ok) {
+                const txt = await swapRes.text();
+                throw new Error(`Swap error: ${swapRes.status} – ${txt}`);
+            }
+            const { swapTransaction } = await swapRes.json();
+
+            // ---------- 4. Sign & send ----------
+            const buf = Uint8Array.from(atob(swapTransaction), (c) => c.charCodeAt(0));
+            const tx = VersionedTransaction.deserialize(buf);
+            const signed = await signTransaction(tx);
+
+            const txid = await solanaConnection.sendRawTransaction(
+                signed.serialize(),
+                { skipPreflight: false, preflightCommitment: 'confirmed' }
+            );
+
+            await confirmSignature(solanaConnection, txid); // already in the file
+
+            // ---------- 5. Success UI & balance refresh ----------
+            setStatus(
+                `${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${txid}`
+            );
             setTradeAmount('');
-        } catch (error) {
-            console.error('Trade error:', error);
-            setStatus(`Trade failed: ${error.message}`);
-            setShowStatusModal(true);
+            setOutputAmount('');
+
+            // refresh SOL
+            const newSol = await solanaConnection.getBalance(walletPublicKey);
+            setUserSolBalance(newSol / LAMPORTS_PER_SOL);
+
+            // refresh token
+            const mintPk = new PublicKey(selectedToken.mint);
+            const ata = getAssociatedTokenAddressSync(mintPk, walletPublicKey);
+            try {
+                const bal = await solanaConnection.getTokenAccountBalance(ata);
+                setUserTokenBalance(bal.value.uiAmount || 0);
+            } catch {
+                setUserTokenBalance(0);
+            }
+        } catch (err) {
+            console.error('Trade error:', err);
+            setStatus(`Trade failed: ${err.message}`);
+            setTradeError(err.message);
         } finally {
             setIsSending(false);
+            setShowStatusModal(true);
         }
     };
     const handleImageChange = (event) => {
@@ -703,287 +823,277 @@ function App() {
             reader.readAsDataURL(file);
         }
     };
-const handleLaunchToken = async () => {
-    if (!connected || !walletPublicKey || !solanaConnection || !client) {
-        setStatus('Wallet not connected or client not ready');
-        setShowStatusModal(true);
-        return;
-    }
-    if (!tokenName || !ticker || !description || !imageFile) {
-        setStatus('Fill all required fields');
-        setShowStatusModal(true);
-        return;
-    }
-    if (tokenName.length > 32 || ticker.length > 10 || description.length > 1000) {
-        setStatus('Name ≤32 chars, Ticker ≤10 chars, Description ≤1000 chars');
-        setShowStatusModal(true);
-        return;
-    }
-    if (decimals !== 6 && decimals !== 9) {
-        setStatus('Decimals must be 6 or 9');
-        setShowStatusModal(true);
-        return;
-    }
-    setIsSending(true);
-    try {
-        let userUsdArkAta = getAssociatedTokenAddressSync(USDARK_MINT, walletPublicKey);
-        if (USDARK_BYPASS === 1) {
-            setStatus('Preparing USDARK fee...');
+    const handleLaunchToken = async () => {
+        if (!connected || !walletPublicKey || !solanaConnection || !client) {
+            setStatus('Wallet not connected or client not ready');
             setShowStatusModal(true);
-            const feeInstructions = [];
-            const { address: ataAddress, instruction: createUserATAIx } = await safeGetOrCreateATA(
-                solanaConnection,
-                walletPublicKey,
-                USDARK_MINT,
-                walletPublicKey
-            );
-            userUsdArkAta = ataAddress;
-            if (createUserATAIx) {
-                feeInstructions.push(createUserATAIx);
-            }
-            const { address: feeAtaAddress, instruction: createFeeATAIx } = await safeGetOrCreateATA(
-                solanaConnection,
-                walletPublicKey,
-                USDARK_MINT,
-                FEE_WALLET
-            );
-            if (createFeeATAIx) {
-                feeInstructions.push(createFeeATAIx);
-            }
-            const feeAmount = new BN(LAUNCH_FEE_USDARK * (10 ** USDARK_DECIMALS));
-            const transferIx = createTransferInstruction(
-                userUsdArkAta,
-                feeAtaAddress,
-                walletPublicKey,
-                feeAmount
-            );
-            feeInstructions.push(transferIx);
-            if (feeInstructions.length > 0) {
-                setStatus('Processing USDARK fee transaction...');
-                setShowStatusModal(true);
-                const feeTx = new Transaction().add(...feeInstructions);
-                const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-                feeTx.recentBlockhash = blockhash;
-                feeTx.feePayer = walletPublicKey;
-                const signedFeeTx = await signTransaction(feeTx);
-                const feeSig = await solanaConnection.sendRawTransaction(signedFeeTx.serialize(), {
-                    skipPreflight: false,
-                    preflightCommitment: 'confirmed',
-                    maxRetries: 5
-                });
-                await confirmSignature(solanaConnection, feeSig);
-                const confirmedFeeTx = await solanaConnection.getTransaction(feeSig, {
-                    commitment: 'confirmed',
-                    maxSupportedTransactionVersion: 0
-                });
-                if (confirmedFeeTx && confirmedFeeTx.meta && confirmedFeeTx.meta.err) {
-                    throw new Error(`Fee transfer failed: ${JSON.stringify(confirmedFeeTx.meta.err)}`);
-                }
-                setStatus('USDARK fee processed.');
-                setShowStatusModal(true);
-            }
+            return;
         }
-        setStatus('Uploading to IPFS...');
-        setShowStatusModal(true);
-        const metadata = {
-            name: tokenName,
-            symbol: ticker,
-            description: description,
-            image: '',
-            twitter: twitterUrl || undefined,
-            telegram: telegramUrl || undefined,
-            website: websiteUrl || undefined,
-        };
-        const metadataUri = await uploadToIPFS(imageFile, metadata, tokenName);
-        setStatus('IPFS upload complete. Creating token...');
-        setShowStatusModal(true);
-        let mint;
-        if (useVanityAddress && vanitySuffix) {
-            setStatus(`Generating vanity address ending with "${vanitySuffix.toUpperCase()}"...`);
+        if (!tokenName || !ticker || !description || !imageFile) {
+            setStatus('Fill all required fields');
             setShowStatusModal(true);
-            mint = generateVanityKeypair(vanitySuffix, 500000, (attempts) => {
-                if (attempts % 10000 === 0) {
-                    setStatus(`Generating vanity address... ${attempts} attempts`);
+            return;
+        }
+        if (tokenName.length > 32 || ticker.length > 10 || description.length > 1000) {
+            setStatus('Name ≤32 chars, Ticker ≤10 chars, Description ≤1000 chars');
+            setShowStatusModal(true);
+            return;
+        }
+        if (decimals !== 6 && decimals !== 9) {
+            setStatus('Decimals must be 6 or 9');
+            setShowStatusModal(true);
+            return;
+        }
+        setIsSending(true);
+        try {
+            let userUsdArkAta = getAssociatedTokenAddressSync(USDARK_MINT, walletPublicKey);
+            if (USDARK_BYPASS === 1) {
+                setStatus('Preparing USDARK fee...');
+                setShowStatusModal(true);
+                const feeInstructions = [];
+                const { address: ataAddress, instruction: createUserATAIx } = await safeGetOrCreateATA(
+                    solanaConnection,
+                    walletPublicKey,
+                    USDARK_MINT,
+                    walletPublicKey
+                );
+                userUsdArkAta = ataAddress;
+                if (createUserATAIx) {
+                    feeInstructions.push(createUserATAIx);
+                }
+                const { address: feeAtaAddress, instruction: createFeeATAIx } = await safeGetOrCreateATA(
+                    solanaConnection,
+                    walletPublicKey,
+                    USDARK_MINT,
+                    FEE_WALLET
+                );
+                if (createFeeATAIx) {
+                    feeInstructions.push(createFeeATAIx);
+                }
+                const feeAmount = new BN(LAUNCH_FEE_USDARK * (10 ** USDARK_DECIMALS));
+                const transferIx = createTransferInstruction(
+                    userUsdArkAta,
+                    feeAtaAddress,
+                    walletPublicKey,
+                    feeAmount
+                );
+                feeInstructions.push(transferIx);
+                if (feeInstructions.length > 0) {
+                    setStatus('Processing USDARK fee transaction...');
+                    setShowStatusModal(true);
+                    const feeTx = new Transaction().add(...feeInstructions);
+                    const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+                    feeTx.recentBlockhash = blockhash;
+                    feeTx.feePayer = walletPublicKey;
+                    const signedFeeTx = await signTransaction(feeTx);
+                    const feeSig = await solanaConnection.sendRawTransaction(signedFeeTx.serialize(), {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed',
+                        maxRetries: 5
+                    });
+                    await confirmSignature(solanaConnection, feeSig);
+                    const confirmedFeeTx = await solanaConnection.getTransaction(feeSig, {
+                        commitment: 'confirmed',
+                        maxSupportedTransactionVersion: 0
+                    });
+                    if (confirmedFeeTx && confirmedFeeTx.meta && confirmedFeeTx.meta.err) {
+                        throw new Error(`Fee transfer failed: ${JSON.stringify(confirmedFeeTx.meta.err)}`);
+                    }
+                    setStatus('USDARK fee processed.');
                     setShowStatusModal(true);
                 }
-            });
-        } else {
-            mint = Keypair.generate();
-        }
-        const config = Keypair.generate();
-        const curveConfig = buildCurveWithMarketCap({
-            totalTokenSupply: TOTAL_SUPPLY_TOKENS,
-            initialMarketCap: 30,
-            migrationMarketCap: 270,
-            migrationOption: MigrationOption.MET_DAMM_V2,
-            tokenBaseDecimal: decimals === 6 ? TokenDecimal.SIX : TokenDecimal.NINE,
-            tokenQuoteDecimal: TokenDecimal.NINE,
-            lockedVestingParam: {
-                totalLockedVestingAmount: 0,
-                numberOfVestingPeriod: 0,
-                cliffUnlockAmount: 0,
-                totalVestingDuration: 0,
-                cliffDurationFromMigrationTime: 0,
-            },
-            baseFeeParams: {
-                baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
-                feeSchedulerParam: {
-                    startingFeeBps: 100,
-                    endingFeeBps: 100,
-                    numberOfPeriod: 0,
-                    totalDuration: 0,
+            }
+            setStatus('Uploading to IPFS...');
+            setShowStatusModal(true);
+            const metadata = {
+                name: tokenName,
+                symbol: ticker,
+                description: description,
+                image: '',
+                twitter: twitterUrl || undefined,
+                telegram: telegramUrl || undefined,
+                website: websiteUrl || undefined,
+            };
+            const { metadataUri, imageUrl } = await uploadToIPFS(imageFile, metadata, tokenName);
+            setStatus('IPFS upload complete. Creating token...');
+            setShowStatusModal(true);
+            let mint;
+            if (useVanityAddress && vanitySuffix) {
+                setStatus(`Generating vanity address ending with "${vanitySuffix.toUpperCase()}"...`);
+                setShowStatusModal(true);
+                mint = generateVanityKeypair(vanitySuffix, 500000, (attempts) => {
+                    if (attempts % 10000 === 0) {
+                        setStatus(`Generating vanity address... ${attempts} attempts`);
+                        setShowStatusModal(true);
+                    }
+                });
+            } else {
+                mint = Keypair.generate();
+            }
+            const config = Keypair.generate();
+            const curveConfig = buildCurveWithMarketCap({
+                totalTokenSupply: TOTAL_SUPPLY_TOKENS,
+                initialMarketCap: 30,
+                migrationMarketCap: 270,
+                migrationOption: MigrationOption.MET_DAMM_V2,
+                tokenBaseDecimal: decimals === 6 ? TokenDecimal.SIX : TokenDecimal.NINE,
+                tokenQuoteDecimal: TokenDecimal.NINE,
+                lockedVestingParam: {
+                    totalLockedVestingAmount: 0,
+                    numberOfVestingPeriod: 0,
+                    cliffUnlockAmount: 0,
+                    totalVestingDuration: 0,
+                    cliffDurationFromMigrationTime: 0,
                 },
-            },
-            dynamicFeeEnabled: true,
-            activationType: ActivationType.Slot,
-            collectFeeMode: CollectFeeMode.QuoteToken,
-            migrationFeeOption: MigrationFeeOption.FixedBps100,
-            tokenType: TokenType.SPL,
-            partnerLpPercentage: 0,
-            creatorLpPercentage: 0,
-            partnerLockedLpPercentage: 50,
-            creatorLockedLpPercentage: 50,
-            creatorTradingFeePercentage: 50,
-            leftover: 1,
-            tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
-            migrationFee: {
-                feePercentage: 0,
-                creatorFeePercentage: 0,
-            },
-        });
-        // Now create config using VersionedTransaction
-        let { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-        const baseTx = await client.partner.createConfig({
-            config: config.publicKey,
-            feeClaimer: FEE_WALLET,
-            leftoverReceiver: FEE_WALLET,
-            payer: walletPublicKey,
-            quoteMint: NATIVE_MINT,
-            ...curveConfig,
-        });
-        const feeTransferIx = SystemProgram.transfer({
-            fromPubkey: walletPublicKey,
-            toPubkey: FEE_WALLET,
-            lamports: BASE_FEE,
-        });
-        baseTx.add(feeTransferIx);
-        baseTx.recentBlockhash = blockhash;
-        baseTx.feePayer = walletPublicKey;
-        const messageV0 = new TransactionMessage({
-            payerKey: walletPublicKey,
-            recentBlockhash: blockhash,
-            instructions: baseTx.instructions,
-        }).compileToV0Message();
-        const unsignedConfigTx = new VersionedTransaction(messageV0);
-        unsignedConfigTx.sign([config]);
-        let signedConfigTx = await signTransaction(unsignedConfigTx);
-        let signature = await solanaConnection.sendRawTransaction(signedConfigTx.serialize(), {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-            maxRetries: 5
-        });
-        await confirmSignature(solanaConnection, signature);
-        // Verify config creation success
-        const confirmedConfigTx = await solanaConnection.getTransaction(signature, {
-            commitment: 'confirmed',
-            maxSupportedTransactionVersion: 0
-        });
-        if (confirmedConfigTx && confirmedConfigTx.meta && confirmedConfigTx.meta.err) {
-            console.error('Config creation failed. Logs:', confirmedConfigTx.meta.logMessages);
-            throw new Error(`Config creation failed: ${JSON.stringify(confirmedConfigTx.meta.err)}`);
+                baseFeeParams: {
+                    baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
+                    feeSchedulerParam: {
+                        startingFeeBps: 100,
+                        endingFeeBps: 100,
+                        numberOfPeriod: 0,
+                        totalDuration: 0,
+                    },
+                },
+                dynamicFeeEnabled: true,
+                activationType: ActivationType.Slot,
+                collectFeeMode: CollectFeeMode.QuoteToken,
+                migrationFeeOption: MigrationFeeOption.FixedBps100,
+                tokenType: TokenType.SPL,
+                partnerLpPercentage: 0,
+                creatorLpPercentage: 0,
+                partnerLockedLpPercentage: 50,
+                creatorLockedLpPercentage: 50,
+                creatorTradingFeePercentage: 50,
+                leftover: 1,
+                tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
+                migrationFee: {
+                    feePercentage: 0,
+                    creatorFeePercentage: 0,
+                },
+            });
+            // Now create config using VersionedTransaction
+            let { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+            const baseTx = await client.partner.createConfig({
+                config: config.publicKey,
+                feeClaimer: FEE_WALLET,
+                leftoverReceiver: FEE_WALLET,
+                payer: walletPublicKey,
+                quoteMint: NATIVE_MINT,
+                ...curveConfig,
+            });
+            const feeTransferIx = SystemProgram.transfer({
+                fromPubkey: walletPublicKey,
+                toPubkey: FEE_WALLET,
+                lamports: BASE_FEE,
+            });
+            baseTx.add(feeTransferIx);
+            baseTx.recentBlockhash = blockhash;
+            baseTx.feePayer = walletPublicKey;
+            const messageV0 = new TransactionMessage({
+                payerKey: walletPublicKey,
+                recentBlockhash: blockhash,
+                instructions: baseTx.instructions,
+            }).compileToV0Message();
+            const unsignedConfigTx = new VersionedTransaction(messageV0);
+            unsignedConfigTx.sign([config]);
+            let signedConfigTx = await signTransaction(unsignedConfigTx);
+            let signature = await solanaConnection.sendRawTransaction(signedConfigTx.serialize(), {
+                skipPreflight: false,
+                preflightCommitment: 'confirmed',
+                maxRetries: 5
+            });
+            await confirmSignature(solanaConnection, signature);
+            // Verify config creation success
+            const confirmedConfigTx = await solanaConnection.getTransaction(signature, {
+                commitment: 'confirmed',
+                maxSupportedTransactionVersion: 0
+            });
+            if (confirmedConfigTx && confirmedConfigTx.meta && confirmedConfigTx.meta.err) {
+                console.error('Config creation failed. Logs:', confirmedConfigTx.meta.logMessages);
+                throw new Error(`Config creation failed: ${JSON.stringify(confirmedConfigTx.meta.err)}`);
+            }
+            setStatus('Config created. Creating pool...');
+            setShowStatusModal(true);
+            // Get fresh blockhash for pool transaction
+            const { blockhash: poolBlockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+            const createPoolParam = {
+                baseMint: mint.publicKey,
+                config: config.publicKey,
+                name: tokenName,
+                symbol: ticker,
+                uri: metadataUri,
+                payer: walletPublicKey,
+                poolCreator: walletPublicKey,
+            };
+            const poolTx = await client.pool.createPool(createPoolParam);
+            poolTx.recentBlockhash = poolBlockhash;
+            poolTx.feePayer = walletPublicKey;
+            poolTx.partialSign(mint);
+            const signedPoolTx = await signTransaction(poolTx);
+            // Send the fully signed transaction
+            signature = await solanaConnection.sendRawTransaction(signedPoolTx.serialize(), {
+                skipPreflight: false,
+                preflightCommitment: 'confirmed',
+                maxRetries: 5
+            });
+            await confirmSignature(solanaConnection, signature);
+            // Verify pool creation success
+            const confirmedPoolTx = await solanaConnection.getTransaction(signature, {
+                commitment: 'confirmed',
+                maxSupportedTransactionVersion: 0
+            });
+            if (confirmedPoolTx && confirmedPoolTx.meta && confirmedPoolTx.meta.err) {
+                console.error('Pool creation failed. Logs:', confirmedPoolTx.meta.logMessages);
+                throw new Error(`Pool creation failed: ${JSON.stringify(confirmedPoolTx.meta.err)}`);
+            }
+            const [poolAddress] = PublicKey.findProgramAddressSync(
+                [mint.publicKey.toBuffer(), NATIVE_MINT.toBuffer(), config.publicKey.toBuffer()],
+                DBC_PROGRAM_ID
+            );
+            const bondingSupplyUnits = (BigInt(BONDING_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
+            const dexSupplyUnits = (BigInt(DEX_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
+            const newToken = {
+                mint: mint.publicKey.toBase58(),
+                pool: poolAddress.toBase58(),
+                name: tokenName,
+                symbol: ticker,
+                description: description,
+                image: imageUrl,
+                totalSupplyUnits: (BigInt(TOTAL_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString(),
+                bondingSupplyUnits,
+                dexSupplyUnits,
+                decimals: decimals,
+                creator: walletPublicKey.toString(),
+                migrationTarget: MIGRATION_TARGET_SOL,
+                solCollected: 0,
+                tokensSoldUnits: '0',
+                graduated: false,
+                signature: signature,
+                timestamp: Date.now(),
+                metadataUri: metadataUri,
+                twitter: twitterUrl || '',
+                telegram: telegramUrl || '',
+                website: websiteUrl || '',
+                volume: 0,
+                transactions: 0,
+                holders: 1
+            };
+            setPendingTokenData(newToken);
+            setShowInitialBuyModal(true);
+        } catch (error) {
+            console.error('Launch error:', error);
+            // Enhanced error logging
+            if (error.logs) {
+                console.error('Transaction logs:', error.logs);
+                setStatus(`Error: ${error.message}. Check console for logs.`);
+            } else {
+                setStatus(`Error: ${error.message}`);
+            }
+            setShowStatusModal(true);
+        } finally {
+            setIsSending(false);
         }
-setStatus('Config created. Creating pool...');
-        setShowStatusModal(true);
-     
-        // Get fresh blockhash for pool transaction
-        const { blockhash: poolBlockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-     
-        const createPoolParam = {
-            baseMint: mint.publicKey,
-            config: config.publicKey,
-            name: tokenName,
-            symbol: ticker,
-            uri: metadataUri,
-            payer: walletPublicKey,
-            poolCreator: walletPublicKey,
-        };
-     
-        const poolTx = await client.pool.createPool(createPoolParam);
-     
-        poolTx.recentBlockhash = poolBlockhash;
-        poolTx.feePayer = walletPublicKey;
-     
-        poolTx.partialSign(mint);
-     
-        const signedPoolTx = await signTransaction(poolTx);
-     
-        // Send the fully signed transaction
-        signature = await solanaConnection.sendRawTransaction(signedPoolTx.serialize(), {
-            skipPreflight: false,
-            preflightCommitment: 'confirmed',
-            maxRetries: 5
-        });
-     
-        await confirmSignature(solanaConnection, signature);
-        // Verify pool creation success
-        const confirmedPoolTx = await solanaConnection.getTransaction(signature, {
-            commitment: 'confirmed',
-            maxSupportedTransactionVersion: 0
-        });
-        if (confirmedPoolTx && confirmedPoolTx.meta && confirmedPoolTx.meta.err) {
-            console.error('Pool creation failed. Logs:', confirmedPoolTx.meta.logMessages);
-            throw new Error(`Pool creation failed: ${JSON.stringify(confirmedPoolTx.meta.err)}`);
-        }
-        const [poolAddress] = PublicKey.findProgramAddressSync(
-            [mint.publicKey.toBuffer(), NATIVE_MINT.toBuffer(), config.publicKey.toBuffer()],
-            DBC_PROGRAM_ID
-        );
-        setStatus(`Token launched! Signature: ${signature}`);
-        setShowStatusModal(true);
-        const bondingSupplyUnits = (BigInt(BONDING_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
-        const dexSupplyUnits = (BigInt(DEX_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
-        const newToken = {
-            mint: mint.publicKey.toBase58(),
-            pool: poolAddress.toBase58(),
-            name: tokenName,
-            symbol: ticker,
-            description: description,
-            image: imagePreview,
-            totalSupplyUnits: (BigInt(TOTAL_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString(),
-            bondingSupplyUnits,
-            dexSupplyUnits,
-            decimals: decimals,
-            creator: walletPublicKey.toString(),
-            migrationTarget: MIGRATION_TARGET_SOL,
-            solCollected: 0,
-            tokensSoldUnits: '0',
-            graduated: false,
-            signature: signature,
-            timestamp: Date.now(),
-            metadataUri: metadataUri,
-            twitter: twitterUrl || '',
-            telegram: telegramUrl || '',
-            website: websiteUrl || '',
-            volume: 0,
-            transactions: 0,
-            holders: 1
-        };
-        setPendingTokenData(newToken);
-        setShowInitialBuyModal(true);
-    } catch (error) {
-        console.error('Launch error:', error);
-        // Enhanced error logging
-        if (error.logs) {
-            console.error('Transaction logs:', error.logs);
-            setStatus(`Error: ${error.message}. Check console for logs.`);
-        } else {
-            setStatus(`Error: ${error.message}`);
-        }
-        setShowStatusModal(true);
-    } finally {
-        setIsSending(false);
-    }
-};
+    };
     const handleInitialBuy = async () => {
         if (!pendingTokenData || !initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || !client) {
             setStatus('Enter a valid SOL amount');
@@ -997,15 +1107,18 @@ setStatus('Config created. Creating pool...');
             const solInLamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
             const docId = await saveTokenToFirestore(pendingTokenData);
             const pool = new PublicKey(pendingTokenData.pool);
+            const dec = pendingTokenData.decimals;
+            const tokensOut = calculateTokensOut(solInLamports, 0, pendingTokenData.bondingSupplyUnits, dec);
+            const minOutUnits = (tokensOut * 995n) / 1000n; // 0.5% slippage
             const swapParam = {
                 amountIn: new BN(solInLamports),
-                minimumAmountOut: new BN(0),
+                minimumAmountOut: new BN(minOutUnits.toString()),
                 swapBaseForQuote: false,
                 owner: walletPublicKey,
                 pool,
                 referralTokenAccount: null,
             };
-            const swapTx = await client.pool.swap(swapParam);
+            const swapTx = await trySwap(client, swapParam);
             const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
             swapTx.recentBlockhash = blockhash;
             swapTx.feePayer = walletPublicKey;
@@ -1014,7 +1127,6 @@ setStatus('Config created. Creating pool...');
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });
-   
             await confirmSignature(solanaConnection, signature);
             const confirmedSwapTx = await solanaConnection.getTransaction(signature, {
                 commitment: 'confirmed',
@@ -1038,17 +1150,14 @@ setStatus('Config created. Creating pool...');
                 holders: 2
             };
             await updateTokenInFirestore(docId, updates);
-   
             setStatus(`Token launched with initial buy of ${solAmount} SOL! TX: ${signature}`);
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
             setInitialBuyAmount('0.5');
-   
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-   
         } catch (error) {
             console.error('Initial buy error:', error);
             setStatus(`Error: ${error.message}`);
@@ -1058,18 +1167,14 @@ setStatus('Config created. Creating pool...');
     const handleSkipInitialBuy = async () => {
         try {
             if (!pendingTokenData) return;
-   
             await saveTokenToFirestore(pendingTokenData);
-   
             setStatus('Token launched and saved! No initial buy.');
             setShowStatusModal(true);
             setShowInitialBuyModal(false);
             setPendingTokenData(null);
-   
             setTimeout(() => {
                 setActivePage('home');
             }, 2000);
-   
         } catch (error) {
             console.error('Save error:', error);
             setStatus(`Error saving token: ${error.message}`);
@@ -1084,11 +1189,11 @@ setStatus('Config created. Creating pool...');
         <>
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
-       
+  
                 * {
                     box-sizing: border-box;
                 }
-       
+  
                 body {
                     margin: 0;
   font-family: 'Orbitron', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
@@ -2206,7 +2311,7 @@ setStatus('Config created. Creating pool...');
                         >
                             <Rocket size={20} /> Launch
                         </button>
-                        <div className="mobile-only" style={{marginTop: '20px'}}>
+                        <div className="mobile-only" style={{ marginTop: '20px' }}>
                             <div className="wallet">
                                 <WalletMultiButton />
                             </div>
@@ -2399,9 +2504,9 @@ setStatus('Config created. Creating pool...');
                                         >
                                             {isSending ? 'Launching...' : USDARK_BYPASS === 1 ? 'Launch Token (0.02 SOL + 2000 USDARK)' : 'Launch Token (0.02 SOL)'}
                                         </button>
-                                        {!enoughSol && <p style={{color: 'red'}}>Insufficient SOL balance (need at least 0.05 SOL for fees and rent)</p>}
-                                        {requireUsdark && !enoughUsdark && <p style={{color: 'red'}}>Insufficient USDARK balance (need at least 2000 USDARK)</p>}
-                                        {!formComplete && <p style={{color: 'red'}}>Please complete all required fields</p>}
+                                        {!enoughSol && <p style={{ color: 'red' }}>Insufficient SOL balance (need at least 0.05 SOL for fees and rent)</p>}
+                                        {requireUsdark && !enoughUsdark && <p style={{ color: 'red' }}>Insufficient USDARK balance (need at least 2000 USDARK)</p>}
+                                        {!formComplete && <p style={{ color: 'red' }}>Please complete all required fields</p>}
                                     </form>
                                 </div>
                                 {/* Live Preview Panel */}
@@ -2420,11 +2525,11 @@ setStatus('Config created. Creating pool...');
                                                     Upload image to preview
                                                 </div>
                                             )}
-                                   
+
                                             <h3 style={{ marginBottom: '10px', fontSize: '1.3em' }}>{tokenName || 'Token Name'} ({ticker || 'TICKER'})</h3>
-                                   
+
                                             <p style={{ color: '#ccc', marginBottom: '15px', fontSize: '0.9em' }}>{description || 'Enter a description for your token...'}</p>
-                                   
+
                                             <div className="preview-stats">
                                                 <div>
                                                     <span>Total Supply</span>
@@ -2439,16 +2544,16 @@ setStatus('Config created. Creating pool...');
                                                     <span>40 SOL</span>
                                                 </div>
                                             </div>
-                                   
+
                                             <div className="bonding-info">
                                                 <div>SOL Collected: 0 / 40</div>
                                                 <div>Progress: 0%</div>
                                             </div>
-                                   
+
                                             <div className="progress-bar">
                                                 <div className="progress" style={{ width: '0%' }}></div>
                                             </div>
-                                   
+
                                             <div className="preview-fee">
                                                 <div><DollarSign size={16} style={{ display: 'inline', marginRight: '5px' }} /> Launch Fee: 0.02 SOL (~$3 USD) {USDARK_BYPASS === 1 ? '+ 2000 USDARK (sent to fee wallet)' : ''}</div>
                                                 <div>Bonding Curve: Manual trading until 40 SOL</div>
@@ -2480,9 +2585,9 @@ setStatus('Config created. Creating pool...');
                                 className="token-detail-image"
                                 onError={(e) => e.target.src = 'https://via.placeholder.com/600x250?text=USDARK'}
                             />
-                   
+
                             <p style={{ color: '#ccc', fontSize: '0.95em' }}> {selectedToken.description}</p>
-                   
+
                             {/* Social Links */}
                             {(selectedToken.twitter || selectedToken.telegram || selectedToken.website) && (
                                 <div className="social-links-large">
@@ -2503,7 +2608,7 @@ setStatus('Config created. Creating pool...');
                                     )}
                                 </div>
                             )}
-                   
+
                             {/* Contract Address */}
                             <div className="ca-copy-section">
                                 <span className="ca-address">Contract: {selectedToken.mint}</span>
@@ -2514,7 +2619,7 @@ setStatus('Config created. Creating pool...');
                                     {copiedCA ? '✓ Copied' : 'Copy CA'}
                                 </button>
                             </div>
-                   
+
                             {/* Token Stats */}
                             <div className="preview-stats">
                                 <div>
@@ -2532,7 +2637,7 @@ setStatus('Config created. Creating pool...');
                                     </span>
                                 </div>
                             </div>
-                   
+
                             {/* Advanced Metrics */}
                             <div style={{ background: 'rgba(0, 0, 0, 0.3)', padding: '20px', borderRadius: '15px', marginTop: '20px', border: '1px solid rgba(28, 194, 154, 0.1)' }}>
                                 <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#1cc29a', fontFamily: 'Orbitron' }}>Token Metrics</h3>
@@ -2554,7 +2659,7 @@ setStatus('Config created. Creating pool...');
                                     const volume = (selectedToken.volume || 0) * solPrice;
                                     const txns = selectedToken.transactions || 0;
                                     const makers = selectedToken.holders || 1;
-                           
+
                                     return (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
                                             <div>
@@ -2593,87 +2698,107 @@ setStatus('Config created. Creating pool...');
                                     );
                                 })()}
                             </div>
-                   
-                            {!selectedToken.graduated && (
+
+                            {selectedToken.graduated ? (
+                                <div className="preview-fee" style={{ background: 'linear-gradient(45deg, rgba(255, 149, 0, 0.1), rgba(255, 170, 0, 0.1))', color: '#ff9500', margin: '20px 0' }}>
+                                    <div>Token Graduated!</div>
+                                    <div>Trade on Raydium or Jupiter</div>
+                                </div>
+                            ) : (
                                 <>
                                     <div className="bonding-info">
                                         <div>SOL Collected: {selectedToken.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
                                         <div>Progress: {((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100).toFixed(1)}%</div>
                                     </div>
-                           
+
                                     <div className="progress-bar">
                                         <div
                                             className="progress"
                                             style={{ width: `${Math.min((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100, 100)}%` }}
                                         ></div>
                                     </div>
-                           
-                                    {/* User Balances */}
-                                    {connected && (
-                                        <div style={{
-                                            background: 'rgba(0, 0, 0, 0.3)',
-                                            padding: '15px',
-                                            borderRadius: '12px',
-                                            marginBottom: '20px',
-                                            border: '1px solid rgba(28, 194, 154, 0.1)'
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                                <span style={{ color: '#888' }}>Your SOL Balance:</span>
-                                                <span style={{ color: '#1cc29a', fontWeight: 'bold' }}>{userSolBalance.toFixed(4)} SOL</span>
-                                            </div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                <span style={{ color: '#888' }}>Your {selectedToken.symbol} Balance:</span>
-                                                <span style={{ color: '#1cc29a', fontWeight: 'bold' }}>{userTokenBalance.toFixed(2)} {selectedToken.symbol}</span>
-                                            </div>
-                                        </div>
-                                    )}
-                           
-                                    {/* Trade Tabs */}
-                                    <div className="trade-tabs">
-                                        <button
-                                            className={`trade-tab ${modalTab === 'buy' ? 'active' : ''}`}
-                                            onClick={() => setModalTab('buy')}
-                                        >
-                                            Buy
-                                        </button>
-                                        <button
-                                            className={`trade-tab ${modalTab === 'sell' ? 'active' : ''}`}
-                                            onClick={() => setModalTab('sell')}
-                                        >
-                                            Sell
-                                        </button>
-                                    </div>
-                           
-                                    {/* Trade Input */}
-                                    <div className="trade-input-group">
-                                        <label>{modalTab === 'buy' ? 'Amount (SOL)' : 'Amount (Tokens)'}</label>
-                                        <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            placeholder={modalTab === 'buy' ? 'Enter SOL amount' : 'Enter token amount'}
-                                            value={tradeAmount}
-                                            onChange={(e) => setTradeAmount(e.target.value)}
-                                        />
-                                    </div>
-                           
-                                    <button
-                                        className="trade-button"
-                                        onClick={handleBuySell}
-                                        disabled={!connected || !tradeAmount || parseFloat(tradeAmount) <= 0 || isSending}
-                                    >
-                                        {isSending ? 'Processing...' : (modalTab === 'buy' ? 'Buy Tokens' : 'Sell Tokens')}
-                                    </button>
                                 </>
                             )}
-                   
-                            {selectedToken.graduated && (
-                                <div className="preview-fee" style={{ background: 'linear-gradient(45deg, rgba(255, 149, 0, 0.1), rgba(255, 170, 0, 0.1))', color: '#ff9500' }}>
-                                    <div>Token Graduated!</div>
-                                    <div>Trade on Raydium or Jupiter</div>
+
+                            {connected && (
+                                <div style={{
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    padding: '15px',
+                                    borderRadius: '12px',
+                                    marginBottom: '20px',
+                                    border: '1px solid rgba(28, 194, 154, 0.1)'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                        <span style={{ color: '#888' }}>Your SOL Balance:</span>
+                                        <span style={{ color: '#1cc29a', fontWeight: 'bold' }}>{userSolBalance.toFixed(4)} SOL</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ color: '#888' }}>Your {selectedToken.symbol} Balance:</span>
+                                        <span style={{ color: '#1cc29a', fontWeight: 'bold' }}>{userTokenBalance.toFixed(2)} {selectedToken.symbol}</span>
+                                    </div>
                                 </div>
                             )}
-                   
+
+                            {/* Trade Tabs */}
+                            <div className="trade-tabs">
+                                <button
+                                    className={`trade-tab ${modalTab === 'buy' ? 'active' : ''}`}
+                                    onClick={() => { setModalTab('buy'); setTradeAmount(''); setOutputAmount(''); }}
+                                >
+                                    Buy
+                                </button>
+                                <button
+                                    className={`trade-tab ${modalTab === 'sell' ? 'active' : ''}`}
+                                    onClick={() => { setModalTab('sell'); setTradeAmount(''); setOutputAmount(''); }}
+                                >
+                                    Sell
+                                </button>
+                            </div>
+
+                            {/* Trade Input */}
+                            <div className="trade-input-group">
+                                <label>{modalTab === 'buy' ? 'Amount (SOL)' : `Amount (${selectedToken.symbol})`}</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder={modalTab === 'buy' ? 'Enter SOL amount' : 'Enter token amount'}
+                                    value={tradeAmount}
+                                    onChange={(e) => setTradeAmount(e.target.value)}
+                                />
+                                <p style={{ color: '#888', fontSize: '0.85em' }}>
+                                    Balance: {modalTab === 'buy' ? userSolBalance.toFixed(4) : userTokenBalance.toFixed(2)} {modalTab === 'buy' ? 'SOL' : selectedToken.symbol}
+                                </p>
+                                {outputAmount && (
+                                    <div style={{ color: '#1cc29a', fontSize: '0.95em', marginTop: '5px' }}>
+                                        Output: {outputAmount} {modalTab === 'buy' ? selectedToken.symbol : 'SOL'}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="trade-input-group">
+                                <label>Slippage (%)</label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0.1"
+                                    value={slippage}
+                                    onChange={(e) => setSlippage(Math.max(0.1, parseFloat(e.target.value) || 0.5))}
+                                />
+                            </div>
+
+                            {tradeError && <div style={{ color: '#ff6666', fontSize: '0.85em', marginBottom: '10px' }}>{tradeError}</div>}
+                            {isFetchingQuote && <div style={{ color: '#888', textAlign: 'center', marginBottom: '10px' }}>Loading quote...</div>}
+
+                            <button
+                                className="trade-button"
+                                onClick={handleTrade}
+                                disabled={!connected || !tradeAmount || parseFloat(tradeAmount) <= 0 || isSending || isFetchingQuote}
+                            >
+                                {isSending ? <Loader2 className="animate-spin" size={20} style={{ display: 'inline', marginRight: '8px' }} /> : null}
+                                {isSending ? 'Processing...' : (modalTab === 'buy' ? 'Buy' : 'Sell') + ` ${selectedToken.symbol}`}
+                            </button>
+
                             {/* Transaction Link */}
                             {selectedToken.signature && (
                                 <div style={{ marginTop: '25px', textAlign: 'center' }}>
@@ -2729,12 +2854,12 @@ setStatus('Config created. Creating pool...');
                                 />
                                 <p style={{ color: '#888', fontSize: '0.9em', marginTop: '8px', textAlign: 'center' }}>
                                     You'll receive approximately {initialBuyAmount && parseFloat(initialBuyAmount) > 0
-                                        ? Number(calculateTokensOut(
+                                        ? (Number(calculateTokensOut(
                                             parseFloat(initialBuyAmount) * LAMPORTS_PER_SOL,
                                             0,
-                                            Number(pendingTokenData.bondingSupplyUnits),
+                                            pendingTokenData.bondingSupplyUnits,
                                             pendingTokenData.decimals
-                                          ) / (10n ** BigInt(pendingTokenData.decimals))).toFixed(0)
+                                        )) / (10 ** pendingTokenData.decimals)).toFixed(0)
                                         : '0'} {pendingTokenData.symbol} tokens
                                 </p>
                             </div>
