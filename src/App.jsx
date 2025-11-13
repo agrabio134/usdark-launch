@@ -44,7 +44,7 @@ const NETWORKS = {
         'https://dawn-devnet.solana.com'
     ],
     'mainnet': [
-        'https://mainnet.helius-rpc.com/?api-key=a736e60e-52b8-469a-9f57-298d73076f3a',  // Primary: Your Helius RPC
+        'https://mainnet.helius-rpc.com/?api-key=a736e60e-52b8-469a-9f57-298d73076f3a', // Primary: Your Helius RPC
         'https://solana.drpc.org/',
         'https://solana-rpc.publicnode.com',
         'https://api.mainnet-beta.solana.com',
@@ -692,23 +692,27 @@ function App() {
         if (isBuy) {
             expectedOutUnits = calculateTokensOut(amountLamportsOrUnits, solReservesLamports, remainingUnits.toString(), dec);
             const minOut = new BN(Number(expectedOutUnits) * (1 - slippage / 100));
-            const param = {
+            const swapParam = {
+                amountIn: new BN(amountLamportsOrUnits),
+                minimumAmountOut: minOut,
+                swapBaseForQuote: false,
+                owner: walletPublicKey,
                 pool,
-                quoteAmount: new BN(amountLamportsOrUnits),
-                minBaseOut: minOut,
-                payer: walletPublicKey,
+                referralTokenAccount: null,
             };
-            tx = await client.pool.buyWithQuoteToken(param);
+            tx = await client.pool.swap(swapParam);
         } else {
             expectedOutUnits = calculateSolOut(amountLamportsOrUnits, solReservesLamports, remainingUnits.toString(), dec);
             const minOut = new BN(Number(expectedOutUnits) * (1 - slippage / 100));
-            const param = {
+            const swapParam = {
+                amountIn: new BN(amountLamportsOrUnits),
+                minimumAmountOut: minOut,
+                swapBaseForQuote: true,
+                owner: walletPublicKey,
                 pool,
-                baseAmount: new BN(amountLamportsOrUnits),
-                minQuoteOut: minOut,
-                payer: walletPublicKey,
+                referralTokenAccount: null,
             };
-            tx = await client.pool.sellWithBaseToken(param);
+            tx = await client.pool.swap(swapParam);
         }
         tx.recentBlockhash = blockhash;
         tx.feePayer = walletPublicKey;
@@ -1855,7 +1859,7 @@ function App() {
                 </div>
             )}
             {/* Status Modal */}
-            {showStatusModal && (
+            {/* {showStatusModal && (
                 <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
                     <div className="modal-content status-modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
@@ -1876,7 +1880,7 @@ function App() {
                         </div>
                     </div>
                 </div>
-            )}
+            )} */}
             {/* Launch Info Modal */}
             {showLaunchInfoModal && (
                 <div className="modal-overlay" onClick={() => setShowLaunchInfoModal(false)}>
