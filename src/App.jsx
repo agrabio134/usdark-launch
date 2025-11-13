@@ -44,6 +44,7 @@ const NETWORKS = {
         'https://dawn-devnet.solana.com'
     ],
     'mainnet': [
+        'https://mainnet.helius-rpc.com/?api-key=a736e60e-52b8-469a-9f57-298d73076f3a',  // Primary: Your Helius RPC
         'https://solana.drpc.org/',
         'https://solana-rpc.publicnode.com',
         'https://api.mainnet-beta.solana.com',
