@@ -1,23 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, Keypair, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import {
+    Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL,
+    Keypair, TransactionInstruction, TransactionMessage, VersionedTransaction
+} from '@solana/web3.js';
 import {
     TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID,
     createTransferInstruction,
     createAssociatedTokenAccountInstruction,
     getAssociatedTokenAddressSync,
-    MintLayout,
     createInitializeMintInstruction,
     getMinimumBalanceForRentExemptMint,
     createMintToInstruction,
-    AuthorityType,
     createSetAuthorityInstruction,
     NATIVE_MINT,
     createBurnInstruction
 } from '@solana/spl-token';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Home, Rocket, TrendingUp, Search, Menu, X, Info, DollarSign, Twitter, Send, Globe, Loader2 } from 'lucide-react';
+import { Home, Rocket, TrendingUp, Search, Menu, X, Info, DollarSign, Twitter, Send, Globe, Loader2, User } from 'lucide-react';
 import axios from 'axios';
 import '@solana/wallet-adapter-react-ui/styles.css';
 import { initializeApp } from 'firebase/app';
@@ -36,7 +37,6 @@ import {
     TokenUpdateAuthorityOption
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import BN from 'bn.js';
-// --- CONFIGURATION CONSTANTS ---
 const NETWORKS = {
     'devnet': [
         'https://api.devnet.solana.com',
@@ -44,15 +44,14 @@ const NETWORKS = {
         'https://dawn-devnet.solana.com'
     ],
     'mainnet': [
-        'https://solana-mainnet.rpc.extrnode.com',
-        'https://api.mainnet-beta.solana.com',
+        'https://solana.drpc.org/',
         'https://solana-rpc.publicnode.com',
-        'https://solana-mainnet.g.alchemy.com/v2/demo', // Additional fallback
-        'https://mainnet.rpcpool.com' // Additional fallback
+        'https://api.mainnet-beta.solana.com',
+        'https://solana.lavenderfive.com/',
+        'https://solana.api.onfinality.io/public'
     ]
 };
 const DEFAULT_NETWORK = 'mainnet';
-// Firebase Configuration
 const firebaseConfig = {
     apiKey: "AIzaSyBmF3F8CgYQfpqN6xSpeL0rkJvpshFLmwk",
     authDomain: "usdark-launchpad.firebaseapp.com",
@@ -61,7 +60,6 @@ const firebaseConfig = {
     messagingSenderId: "54701943971",
     appId: "1:54701943971:web:295fa5465d713d28502316"
 };
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -72,7 +70,7 @@ try {
     console.error('Invalid FEE_WALLET address:', error);
     FEE_WALLET = new PublicKey('11111111111111111111111111111111');
 }
-const BASE_FEE = 0.02 * LAMPORTS_PER_SOL; // Launch fee in SOL
+const BASE_FEE = 0.02 * LAMPORTS_PER_SOL;
 const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJhMTNlMDlhMy1hYmJjLTQwOWYtOTdmMi1mNGY0N2Y2ODUzZDYiLCJlbWFpbCI6ImFncmFiaW9oYXJ2ZXlAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6IjE2MTc1YTM5NTE5NWFmMWVjNjk5Iiwic2NvcGVkS2V5U2VjcmV0IjoiY2FjNWI4NmRjYjkxMzBlYWQ5NWM4MTZmMzk3ZWZiMWUyZTIwMzQxZjM1OGMxMzk5YTE0ZWYzYjczNjNkYmE0MSIsImV4cCI6MTc5MTg5MjU4NH0.ZRvRz1xkIvI0VN-Xd44ZdXSUEMhVyK-TaNFPk4BOZYs';
 const TOTAL_SUPPLY_TOKENS = 1000000000;
 const BONDING_SUPPLY_TOKENS = 800000000;
@@ -82,26 +80,9 @@ const VIRTUAL_SOL_LAMPORTS = BigInt(30 * LAMPORTS_PER_SOL);
 const VIRTUAL_TOKENS_BASE = 200000000n;
 const DBC_PROGRAM_ID = new PublicKey('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');
 const USDARK_MINT = new PublicKey('4EKDKWJDrqrCQtAD6j9sM5diTeZiKBepkEB8GLP9Dark');
-const USDARK_DECIMALS = 6; // Assuming 6 decimals for USDARK
-const LAUNCH_FEE_USDARK = 2000; // UI amount of USDARK required
-const USDARK_BYPASS = 1; // 0 for development (skip check/fee), 1 for mandatory
-// Helper functions
-const generateVanityKeypair = (suffix, maxAttempts = 100000, onProgress = null) => {
-    const upperSuffix = suffix.toUpperCase();
-    for (let i = 0; i < maxAttempts; i++) {
-        const keypair = Keypair.generate();
-        const address = keypair.publicKey.toBase58();
-        if (address.endsWith(upperSuffix)) {
-            console.log(`Found vanity address after ${i + 1} attempts: ${address}`);
-            return keypair;
-        }
-        if (onProgress && i > 0 && i % 1000 === 0) {
-            onProgress(i);
-        }
-    }
-    console.log(`Could not find vanity address after ${maxAttempts} attempts, using random`);
-    return Keypair.generate();
-};
+const USDARK_DECIMALS = 6;
+const LAUNCH_FEE_USDARK = 2000;
+const USDARK_BYPASS = 1;
 const uploadToPinata = async (data, options = { pinataMetadata: { name: 'metadata' } }) => {
     const formData = new FormData();
     if (data instanceof File) {
@@ -135,7 +116,6 @@ const uploadToIPFS = async (imageFile, metadata, tokenName) => {
             imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
         }
         metadata.image = imageUrl;
-        // Add social links to metadata
         if (metadata.twitter) metadata.twitter = metadata.twitter;
         if (metadata.telegram) metadata.telegram = metadata.telegram;
         if (metadata.website) metadata.website = metadata.website;
@@ -147,22 +127,32 @@ const uploadToIPFS = async (imageFile, metadata, tokenName) => {
         throw new Error(`IPFS upload failed: ${error.message}`);
     }
 };
-// Safe ATA helper
+const timeoutPromise = (promise, ms) => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms))
+    ]);
+};
 const safeGetOrCreateATA = async (connection, payer, mint, owner) => {
     const ata = getAssociatedTokenAddressSync(mint, owner);
-    const accountInfo = await connection.getAccountInfo(ata, 'confirmed');
-    if (accountInfo && accountInfo.owner.equals(TOKEN_PROGRAM_ID)) {
-        return { address: ata };
-    } else {
+    try {
+        const accountInfo = await timeoutPromise(connection.getAccountInfo(ata, 'confirmed'), 10000);
+        if (accountInfo && accountInfo.owner.equals(TOKEN_PROGRAM_ID)) {
+            return { address: ata };
+        } else {
+            const ix = createAssociatedTokenAccountInstruction(payer, ata, owner, mint);
+            return { address: ata, instruction: ix };
+        }
+    } catch (error) {
+        console.warn('getAccountInfo timed out or failed, assuming ATA does not exist:', error.message);
         const ix = createAssociatedTokenAccountInstruction(payer, ata, owner, mint);
         return { address: ata, instruction: ix };
     }
 };
-// Constant product bonding curve with virtual reserves and 1% fee
 const calculateTokensOut = (solInLamports, solReservesLamports, tokenReservesUnits, decimals) => {
     const virtualTokens = VIRTUAL_TOKENS_BASE * (10n ** BigInt(decimals));
     const solInBig = BigInt(solInLamports);
-    const fee = solInBig / 100n; // 1% fee
+    const fee = solInBig / 100n;
     const solInNet = solInBig - fee;
     const actualSol = BigInt(solReservesLamports);
     const actualTokens = BigInt(tokenReservesUnits);
@@ -177,7 +167,7 @@ const calculateTokensOut = (solInLamports, solReservesLamports, tokenReservesUni
 const calculateSolOut = (tokensInUnits, solReservesLamports, tokenReservesUnits, decimals) => {
     const virtualTokens = VIRTUAL_TOKENS_BASE * (10n ** BigInt(decimals));
     const tokensInBig = BigInt(tokensInUnits);
-    const fee = tokensInBig / 100n; // 1% fee
+    const fee = tokensInBig / 100n;
     const tokensInNet = tokensInBig - fee;
     const actualSol = BigInt(solReservesLamports);
     const actualTokens = BigInt(tokenReservesUnits);
@@ -189,13 +179,11 @@ const calculateSolOut = (tokensInUnits, solReservesLamports, tokenReservesUnits,
     const solOut = effectiveSol - newEffectiveSol;
     return solOut;
 };
-// TokenCard Component
 const TokenCard = ({ token, onAction, solPrice }) => {
     const isNew = token.timestamp && (Date.now() - token.timestamp < 3600000);
     const progress = token.graduated ? 100 : (token.solCollected / MIGRATION_TARGET_SOL) * 100;
-    // Calculate metrics using bonding curve
     const virtualSol = 30;
-    const virtualTokens = 200000000; // Fixed to match VIRTUAL_TOKENS_BASE
+    const virtualTokens = 200000000;
     const tokensSoldUnits = token.tokensSoldUnits || '0';
     const decimalsBig = BigInt(token.decimals);
     const pow10 = 10n ** decimalsBig;
@@ -242,7 +230,6 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             </div>
             <p className="token-description">{token.description?.substring(0, 100)}{token.description?.length > 100 ? '...' : ''}</p>
             <div className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</div>
-            {/* Token Metrics */}
             <div className="token-metrics">
                 <div className="metric-row">
                     <span>Price:</span>
@@ -279,7 +266,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             <div className="token-stats">
                 <div>
                     <div>Supply</div>
-                    <div>1000M</div>
+                    <div>1B</div>
                 </div>
                 <div>
                     <div>Holders</div>
@@ -298,7 +285,6 @@ const TokenCard = ({ token, onAction, solPrice }) => {
         </div>
     );
 };
-// Custom confirmation function
 const confirmSignature = async (connection, signature, commitment = 'confirmed') => {
     let start = Date.now();
     const timeout = 60 * 1000;
@@ -317,7 +303,36 @@ const confirmSignature = async (connection, signature, commitment = 'confirmed')
     }
     throw new Error('Transaction confirmation timeout');
 };
-// Main App
+const generateVanityKeypair = (setProgress) => {
+    return new Promise((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 1000000;
+        const batchSize = 1000;
+        const generateBatch = () => {
+            if (attempts >= maxAttempts) {
+                reject(new Error(`Vanity generation failed after ${maxAttempts} attempts. Try again or uncheck the option.`));
+                return;
+            }
+            const start = attempts;
+            let found = false;
+            for (let i = 0; i < batchSize && attempts < maxAttempts; i++) {
+                attempts++;
+                const keypair = Keypair.generate();
+                const pubStr = keypair.publicKey.toBase58();
+                if (pubStr.toUpperCase().endsWith('DRK')) {
+                    resolve(keypair);
+                    found = true;
+                    break;
+                }
+            }
+            if (setProgress) setProgress(attempts);
+            if (!found) {
+                setTimeout(generateBatch, 0);
+            }
+        };
+        generateBatch();
+    });
+};
 function App() {
     const [network, setNetwork] = useState(DEFAULT_NETWORK);
     const [solanaConnection, setSolanaConnection] = useState(null);
@@ -340,7 +355,6 @@ function App() {
     const [isLoadingTokens, setIsLoadingTokens] = useState(true);
     const [firebaseUser, setFirebaseUser] = useState(null);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
-    // Launch Form States
     const [tokenName, setTokenName] = useState('');
     const [ticker, setTicker] = useState('');
     const [description, setDescription] = useState('');
@@ -348,11 +362,12 @@ function App() {
     const [imagePreview, setImagePreview] = useState('');
     const [decimals, setDecimals] = useState(6);
     const [useVanityAddress, setUseVanityAddress] = useState(false);
-    const [vanitySuffix, setVanitySuffix] = useState('');
+    const [vanityStatus, setVanityStatus] = useState('idle');
+    const [vanityProgress, setVanityProgress] = useState(0);
+    const [vanityResult, setVanityResult] = useState(null);
     const [twitterUrl, setTwitterUrl] = useState('');
     const [telegramUrl, setTelegramUrl] = useState('');
     const [websiteUrl, setWebsiteUrl] = useState('');
-    // Buy/Sell Modal States
     const [showModal, setShowModal] = useState(false);
     const [selectedToken, setSelectedToken] = useState(null);
     const [modalTab, setModalTab] = useState('buy');
@@ -363,20 +378,22 @@ function App() {
     const [userTokenBalance, setUserTokenBalance] = useState(0);
     const [userSolBalance, setUserSolBalance] = useState(0);
     const [userUsdarkBalance, setUserUsdarkBalance] = useState(0);
-    const [solPrice, setSolPrice] = useState(150); // Default SOL price in USD
+    const [solPrice, setSolPrice] = useState(150);
     const [isFetchingQuote, setIsFetchingQuote] = useState(false);
     const [tradeError, setTradeError] = useState('');
-    // Initial Buy Modal States
     const [showInitialBuyModal, setShowInitialBuyModal] = useState(false);
     const [initialBuyAmount, setInitialBuyAmount] = useState('0.5');
     const [pendingTokenData, setPendingTokenData] = useState(null);
-    // Launch Info Modal
     const [showLaunchInfoModal, setShowLaunchInfoModal] = useState(false);
+    // Profile state
+    const [claimableFees, setClaimableFees] = useState({});
+    const userTokens = useMemo(() => {
+        return createdTokens.filter(token => token.creator === walletPublicKey?.toBase58());
+    }, [createdTokens, walletPublicKey]);
     const client = useMemo(() => {
         if (!solanaConnection) return null;
         return new DynamicBondingCurveClient(solanaConnection, 'confirmed');
     }, [solanaConnection]);
-    // Fetch SOL price on mount
     useEffect(() => {
         const fetchSolPrice = async () => {
             try {
@@ -387,17 +404,15 @@ function App() {
             }
         };
         fetchSolPrice();
-        const interval = setInterval(fetchSolPrice, 60000); // Update every minute
+        const interval = setInterval(fetchSolPrice, 60000);
         return () => clearInterval(interval);
     }, []);
-    // Firebase Authentication
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
                 console.log('Firebase user authenticated:', user.uid);
                 setFirebaseUser(user);
             } else {
-                // Sign in anonymously if not authenticated
                 signInAnonymously(auth).catch((error) => {
                     console.error('Firebase auth error:', error);
                     setStatus('Firebase authentication failed');
@@ -407,7 +422,6 @@ function App() {
         });
         return () => unsubscribe();
     }, []);
-    // Load tokens from Firestore
     useEffect(() => {
         if (!firebaseUser) return;
         setIsLoadingTokens(true);
@@ -426,7 +440,6 @@ function App() {
             });
             setCreatedTokens(tokens);
             setIsLoadingTokens(false);
-            console.log(`Loaded ${tokens.length} unique tokens from Firestore`);
         }, (error) => {
             console.error('Error loading tokens:', error);
             setStatus('Failed to load tokens from database');
@@ -435,42 +448,61 @@ function App() {
         });
         return () => unsubscribe();
     }, [firebaseUser]);
-    // Real-time updates from Solana
     useEffect(() => {
-        if (!client || !createdTokens.length) return;
-        const subs = [];
-        for (const token of createdTokens) {
-            if (token.graduated || !token.pool) continue;
-            const poolPk = new PublicKey(token.pool);
-            try {
-                const sub = solanaConnection.onAccountChange(poolPk, async (info) => {
-                    const poolState = client.state.parsePool(info.data);
-                    const newSolCollected = Number(poolState.quoteReserve) / LAMPORTS_PER_SOL;
-                    const tokenSupply = await solanaConnection.getTokenSupply(new PublicKey(token.mint));
-                    const tokensSoldUnits = tokenSupply.value.amount;
-                    const updates = {
-                        solCollected: newSolCollected,
-                        tokensSoldUnits,
-                        graduated: newSolCollected >= MIGRATION_TARGET_SOL,
-                    };
-                    if (token.solCollected !== newSolCollected) {
-                        await updateTokenInFirestore(token.id, updates);
+        if (!solanaConnection || !client || !createdTokens.length) return;
+        // Limit to recent 10 tokens to reduce polling load
+        const recentTokens = createdTokens.slice(0, 10).filter(token => !token.graduated && token.pool);
+        let pollInterval;
+        if (recentTokens.length > 0) {
+            pollInterval = setInterval(async () => {
+                for (const token of recentTokens) {
+                    try {
+                        const poolPk = new PublicKey(token.pool);
+                        const info = await solanaConnection.getAccountInfo(poolPk);
+                        if (info) {
+                            const poolState = client.state.parsePool(info.data);
+                            const newSolCollected = Number(poolState.quoteReserve) / LAMPORTS_PER_SOL;
+                            const baseReserveUnits = poolState.baseReserve;
+                            const bondingSupplyBN = new BN(token.bondingSupplyUnits);
+                            const tokensSoldUnitsBN = bondingSupplyBN.sub(baseReserveUnits);
+                            const tokensSoldUnits = tokensSoldUnitsBN.toString();
+                            const updates = {
+                                solCollected: newSolCollected,
+                                tokensSoldUnits,
+                                graduated: newSolCollected >= MIGRATION_TARGET_SOL,
+                            };
+                            if (token.id && (token.solCollected !== newSolCollected || token.tokensSoldUnits !== tokensSoldUnits)) {
+                                await updateTokenInFirestore(token.id, updates);
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Polling error for pool:', token.pool, err);
                     }
-                });
-                subs.push(sub);
-            } catch (err) {
-                console.error('Subscription error for pool:', token.pool, err);
-            }
+                }
+            }, 10000); // Poll every 10 seconds
         }
-        return () => subs.forEach(sub => {
-            try {
-                solanaConnection.removeAccountChangeListener(sub);
-            } catch (err) {
-                console.error('Unsubscribe error:', err);
-            }
-        });
+        return () => {
+            if (pollInterval) clearInterval(pollInterval);
+        };
     }, [createdTokens, client, solanaConnection]);
-    // Fetch user balances for SOL and USDARK
+    // Fetch claimable fees for user tokens
+    useEffect(() => {
+        const fetchClaimables = async () => {
+            if (!solanaConnection || !client || !walletPublicKey || userTokens.length === 0) return;
+            const newFees = {};
+            for (const token of userTokens) {
+                try {
+                    // Approximate calculation based on SOL collected (assumes fees from buys)
+                    newFees[token.mint] = token.solCollected * 0.04 * 0.6; // 60% of 4% fees
+                } catch (error) {
+                    console.error(`Error fetching fees for ${token.name}:`, error);
+                    newFees[token.mint] = 0;
+                }
+            }
+            setClaimableFees(newFees);
+        };
+        fetchClaimables();
+    }, [userTokens, client, solanaConnection, walletPublicKey]);
     useEffect(() => {
         const fetchBalances = async () => {
             if (!connected || !walletPublicKey || !solanaConnection) return;
@@ -490,7 +522,6 @@ function App() {
         };
         fetchBalances();
     }, [connected, walletPublicKey, solanaConnection]);
-    // Output calculation for trade modal
     useEffect(() => {
         const updateOutput = async () => {
             if (!selectedToken || !tradeAmount || parseFloat(tradeAmount) <= 0) {
@@ -542,34 +573,29 @@ function App() {
         const timeoutId = setTimeout(updateOutput, 300);
         return () => clearTimeout(timeoutId);
     }, [tradeAmount, modalTab, selectedToken, slippage]);
-    // Helper function to save token to Firestore
     const saveTokenToFirestore = async (tokenData) => {
         try {
             const docRef = await addDoc(collection(db, 'tokens'), tokenData);
-            console.log('Token saved to Firestore with ID:', docRef.id);
             return docRef.id;
         } catch (error) {
             console.error('Error saving token to Firestore:', error);
             throw new Error('Failed to save token to database');
         }
     };
-    // Helper function to update token in Firestore
     const updateTokenInFirestore = async (tokenId, updates) => {
         try {
             const tokenRef = doc(db, 'tokens', tokenId);
             await updateDoc(tokenRef, updates);
-            console.log('Token updated in Firestore:', tokenId);
         } catch (error) {
             console.error('Error updating token in Firestore:', error);
             throw new Error('Failed to update token in database');
         }
     };
-    // Create connection with fallback RPCs
     const createConnection = async (rpcUrls) => {
         for (const url of rpcUrls) {
             try {
                 const connection = new Connection(url, 'confirmed');
-                await connection.getSlot('confirmed');
+                await timeoutPromise(connection.getSlot('confirmed'), 5000);
                 console.log(`Connected to ${url}`);
                 return connection;
             } catch (e) {
@@ -618,18 +644,13 @@ function App() {
             setOutputAmount('');
             setTradeError('');
             setSlippage(0.5);
-            // Fetch user balances
             if (connected && walletPublicKey && solanaConnection) {
                 try {
-                    // Get SOL balance
                     const solBal = await solanaConnection.getBalance(walletPublicKey);
                     setUserSolBalance(solBal / LAMPORTS_PER_SOL);
-
-                    // Get token balance
                     const mint = new PublicKey(token.mint);
                     const userATA = getAssociatedTokenAddressSync(mint, walletPublicKey);
                     const accountInfo = await solanaConnection.getAccountInfo(userATA);
-
                     if (accountInfo) {
                         const tokenAccountInfo = await solanaConnection.getTokenAccountBalance(userATA);
                         setUserTokenBalance(parseFloat(tokenAccountInfo.value.uiAmount || 0));
@@ -654,139 +675,128 @@ function App() {
         setCopiedCA(true);
         setTimeout(() => setCopiedCA(false), 2000);
     };
-    const trySwap = async (client, swapParam, maxRetries = 10, retryDelay = 1000) => {
-        let attempt = 0;
-        while (attempt < maxRetries) {
-            try {
-                return await client.pool.swap(swapParam);
-            } catch (error) {
-                if (error.message.includes('Pool not found')) {
-                    attempt++;
-                    console.log(`Pool not found, retrying attempt ${attempt}/${maxRetries}...`);
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
-                } else {
-                    throw error;
-                }
-            }
+    const handleBondingTrade = async (token, isBuy, amountUi) => {
+        if (!client || !walletPublicKey) throw new Error('Client or wallet not ready');
+        const pool = new PublicKey(token.pool);
+        const dec = token.decimals;
+        const amountLamportsOrUnits = Math.floor(amountUi * (isBuy ? LAMPORTS_PER_SOL : (10 ** dec)));
+        if (amountLamportsOrUnits <= 0) throw new Error('Invalid amount');
+        const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+        let tx;
+        let expectedOutUnits;
+        const solReservesLamports = Math.floor(token.solCollected * LAMPORTS_PER_SOL);
+        const tokensSoldUnits = BigInt(token.tokensSoldUnits || '0');
+        const bondingUnits = BigInt(token.bondingSupplyUnits);
+        const remainingUnits = bondingUnits - tokensSoldUnits;
+        if (isBuy) {
+            expectedOutUnits = calculateTokensOut(amountLamportsOrUnits, solReservesLamports, remainingUnits.toString(), dec);
+            const minOut = new BN(Number(expectedOutUnits) * (1 - slippage / 100));
+            const param = {
+                pool,
+                quoteAmount: new BN(amountLamportsOrUnits),
+                minBaseOut: minOut,
+                payer: walletPublicKey,
+            };
+            tx = await client.pool.buyWithQuoteToken(param);
+        } else {
+            expectedOutUnits = calculateSolOut(amountLamportsOrUnits, solReservesLamports, remainingUnits.toString(), dec);
+            const minOut = new BN(Number(expectedOutUnits) * (1 - slippage / 100));
+            const param = {
+                pool,
+                baseAmount: new BN(amountLamportsOrUnits),
+                minQuoteOut: minOut,
+                payer: walletPublicKey,
+            };
+            tx = await client.pool.sellWithBaseToken(param);
         }
-        throw new Error('Max retries reached for swap operation');
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = walletPublicKey;
+        const signed = await signTransaction(tx);
+        const sig = await solanaConnection.sendRawTransaction(signed.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+            maxRetries: 5,
+        });
+        await confirmSignature(solanaConnection, sig);
+        // Approximate local update
+        if (token.id && isBuy) {
+            const newSolCollected = token.solCollected + amountUi;
+            const newTokensSoldUnits = (BigInt(token.tokensSoldUnits || '0') + BigInt(expectedOutUnits)).toString();
+            await updateTokenInFirestore(token.id, { solCollected: newSolCollected, tokensSoldUnits: newTokensSoldUnits });
+        } else if (token.id && !isBuy) {
+            const newTokensSoldUnits = (BigInt(token.tokensSoldUnits || '0') - BigInt(amountLamportsOrUnits)).toString();
+            await updateTokenInFirestore(token.id, { tokensSoldUnits: newTokensSoldUnits });
+        }
+        return sig;
     };
-    // ---------------------------------------------------------------
-    //  NEW handleTrade (replace the old one with this block)
-    // ---------------------------------------------------------------
     const handleTrade = async () => {
-        if (
-            !connected ||
-            !walletPublicKey ||
-            !selectedToken ||
-            !tradeAmount ||
-            parseFloat(tradeAmount) <= 0
-        ) {
+        if (!connected || !walletPublicKey || !selectedToken || !tradeAmount || parseFloat(tradeAmount) <= 0) {
             setStatus('Enter a valid amount');
             setShowStatusModal(true);
             return;
         }
-
         const inputBal = modalTab === 'buy' ? userSolBalance : userTokenBalance;
         if (parseFloat(tradeAmount) > inputBal) {
             setStatus('Insufficient balance');
             setShowStatusModal(true);
             return;
         }
-
         setIsSending(true);
         setStatus(`Processing ${modalTab}...`);
         setShowStatusModal(true);
-
         try {
-            // ---------- 1. Mint & decimals ----------
-            const isUsdark = selectedToken.mint === USDARK_MINT.toBase58();
-
-            const inputMint =
-                modalTab === 'buy' ? NATIVE_MINT.toString() : selectedToken.mint;
-            const outputMint =
-                modalTab === 'buy' ? selectedToken.mint : NATIVE_MINT.toString();
-
-            const inputDec =
-                modalTab === 'buy'
-                    ? 9
-                    : isUsdark
-                        ? 6
-                        : selectedToken.decimals;
-            const outputDec =
-                modalTab === 'buy'
-                    ? isUsdark
-                        ? 6
-                        : selectedToken.decimals
-                    : 9;
-
-            const amountInLamports = Math.floor(
-                parseFloat(tradeAmount) * Math.pow(10, inputDec)
-            );
-            if (amountInLamports <= 0) throw new Error('Invalid amount');
-
-            // ---------- 2. Quote (lite endpoint) ----------
-            const quoteParams = new URLSearchParams({
-                inputMint,
-                outputMint,
-                amount: amountInLamports.toString(),
-                slippageBps: Math.floor(slippage * 100).toString(),
-            });
-            const quoteRes = await fetch(
-                `https://lite-api.jup.ag/swap/v1/quote?${quoteParams}`
-            );
-            if (!quoteRes.ok) {
-                const txt = await quoteRes.text();
-                throw new Error(`Quote error: ${quoteRes.status} – ${txt}`);
+            if (selectedToken.graduated) {
+                const isUsdark = selectedToken.mint === USDARK_MINT.toBase58();
+                const inputMint = modalTab === 'buy' ? NATIVE_MINT.toString() : selectedToken.mint;
+                const outputMint = modalTab === 'buy' ? selectedToken.mint : NATIVE_MINT.toString();
+                const inputDec = modalTab === 'buy' ? 9 : isUsdark ? 6 : selectedToken.decimals;
+                const outputDec = modalTab === 'buy' ? isUsdark ? 6 : selectedToken.decimals : 9;
+                const amountInLamports = Math.floor(parseFloat(tradeAmount) * Math.pow(10, inputDec));
+                if (amountInLamports <= 0) throw new Error('Invalid amount');
+                const quoteParams = new URLSearchParams({
+                    inputMint,
+                    outputMint,
+                    amount: amountInLamports.toString(),
+                    slippageBps: Math.floor(slippage * 100).toString(),
+                });
+                const quoteRes = await fetch(`https://lite-api.jup.ag/swap/v1/quote?${quoteParams}`);
+                if (!quoteRes.ok) {
+                    const txt = await quoteRes.text();
+                    throw new Error(`Quote error: ${quoteRes.status} – ${txt}`);
+                }
+                const quote = await quoteRes.json();
+                const outUi = parseFloat(quote.outAmount) / Math.pow(10, outputDec);
+                setOutputAmount(outUi.toFixed(6));
+                const swapRes = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        quoteResponse: quote,
+                        userPublicKey: walletPublicKey.toString(),
+                        wrapAndUnwrapSol: true,
+                        dynamicComputeUnitLimit: true,
+                        prioritizationFeeLamports: 'auto',
+                    }),
+                });
+                if (!swapRes.ok) {
+                    const txt = await swapRes.text();
+                    throw new Error(`Swap error: ${swapRes.status} – ${txt}`);
+                }
+                const { swapTransaction } = await swapRes.json();
+                const buf = Uint8Array.from(atob(swapTransaction), (c) => c.charCodeAt(0));
+                const tx = VersionedTransaction.deserialize(buf);
+                const signed = await signTransaction(tx);
+                const txid = await solanaConnection.sendRawTransaction(signed.serialize(), { skipPreflight: false, preflightCommitment: 'confirmed' });
+                await confirmSignature(solanaConnection, txid);
+                setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${txid}`);
+            } else {
+                const sig = await handleBondingTrade(selectedToken, modalTab === 'buy', parseFloat(tradeAmount));
+                setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${sig}`);
             }
-            const quote = await quoteRes.json();
-
-            // optional UI – show out-amount while waiting for the swap tx
-            const outUi = parseFloat(quote.outAmount) / Math.pow(10, outputDec);
-            setOutputAmount(outUi.toFixed(6));
-
-            // ---------- 3. Swap transaction ----------
-            const swapRes = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    quoteResponse: quote,
-                    userPublicKey: walletPublicKey.toString(),
-                    wrapAndUnwrapSol: true,
-                    dynamicComputeUnitLimit: true,
-                    prioritizationFeeLamports: 'auto',
-                }),
-            });
-            if (!swapRes.ok) {
-                const txt = await swapRes.text();
-                throw new Error(`Swap error: ${swapRes.status} – ${txt}`);
-            }
-            const { swapTransaction } = await swapRes.json();
-
-            // ---------- 4. Sign & send ----------
-            const buf = Uint8Array.from(atob(swapTransaction), (c) => c.charCodeAt(0));
-            const tx = VersionedTransaction.deserialize(buf);
-            const signed = await signTransaction(tx);
-
-            const txid = await solanaConnection.sendRawTransaction(
-                signed.serialize(),
-                { skipPreflight: false, preflightCommitment: 'confirmed' }
-            );
-
-            await confirmSignature(solanaConnection, txid); // already in the file
-
-            // ---------- 5. Success UI & balance refresh ----------
-            setStatus(
-                `${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${txid}`
-            );
             setTradeAmount('');
             setOutputAmount('');
-
-            // refresh SOL
             const newSol = await solanaConnection.getBalance(walletPublicKey);
             setUserSolBalance(newSol / LAMPORTS_PER_SOL);
-
-            // refresh token
             const mintPk = new PublicKey(selectedToken.mint);
             const ata = getAssociatedTokenAddressSync(mintPk, walletPublicKey);
             try {
@@ -802,6 +812,89 @@ function App() {
         } finally {
             setIsSending(false);
             setShowStatusModal(true);
+        }
+    };
+    // Initial buy handler
+    const handleInitialBuy = async () => {
+        if (!connected || !walletPublicKey || !pendingTokenData || !initialBuyAmount || parseFloat(initialBuyAmount) <= 0) {
+            setStatus('Enter a valid amount');
+            setShowStatusModal(true);
+            return;
+        }
+        const amountUi = parseFloat(initialBuyAmount);
+        if (userSolBalance < amountUi) {
+            setStatus('Insufficient SOL balance');
+            setShowStatusModal(true);
+            return;
+        }
+        setIsSending(true);
+        setStatus('Processing initial buy...');
+        setShowStatusModal(true);
+        try {
+            const sig = await handleBondingTrade(pendingTokenData, true, amountUi);
+            const docId = await saveTokenToFirestore(pendingTokenData);
+            const savedToken = { ...pendingTokenData, id: docId };
+            setCreatedTokens(prev => [savedToken, ...prev]);
+            setSelectedToken(savedToken);
+            setShowInitialBuyModal(false);
+            setShowModal(true);
+            setStatus(`Initial buy successful! TX: ${sig}`);
+            setInitialBuyAmount('0.5');
+        } catch (err) {
+            console.error('Initial buy error:', err);
+            setStatus(`Initial buy failed: ${err.message}`);
+        } finally {
+            setIsSending(false);
+            setShowStatusModal(true);
+        }
+    };
+    // Claim creator fees
+    const handleClaim = async (token) => {
+        const feeSol = claimableFees[token.mint];
+        if (!connected || !walletPublicKey || !client || feeSol <= 0) {
+            setStatus('No fees to claim or wallet not connected');
+            setShowStatusModal(true);
+            return;
+        }
+        setIsSending(true);
+        setStatus('Claiming fees...');
+        setShowStatusModal(true);
+        try {
+            const pool = new PublicKey(token.pool);
+            const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+            const claimParam = {
+                pool,
+                destination: walletPublicKey, // Native SOL
+            };
+            const claimTx = await client.pool.claimCreatorTradingFee(claimParam);
+            claimTx.recentBlockhash = blockhash;
+            claimTx.feePayer = walletPublicKey;
+            const signed = await signTransaction(claimTx);
+            const sig = await solanaConnection.sendRawTransaction(signed.serialize(), {
+                skipPreflight: false,
+                preflightCommitment: 'confirmed',
+                maxRetries: 5,
+            });
+            await confirmSignature(solanaConnection, sig);
+            setStatus(`Claimed ${feeSol.toFixed(4)} SOL in fees! TX: ${sig}`);
+            setShowStatusModal(true);
+            // Update local state
+            setClaimableFees(prev => ({ ...prev, [token.mint]: 0 }));
+            // Refresh balances
+            const newSol = await solanaConnection.getBalance(walletPublicKey);
+            setUserSolBalance(newSol / LAMPORTS_PER_SOL);
+            // Re-fetch claimables
+            const newFees = {};
+            for (const t of userTokens) {
+                newFees[t.mint] = t.solCollected * 0.04 * 0.6;
+            }
+            setClaimableFees(newFees);
+        } catch (error) {
+            console.error('Claim error:', error);
+            setStatus(`Claim failed: ${error.message}`);
+            setShowStatusModal(true);
+        } finally {
+            setIsSending(false);
         }
     };
     const handleImageChange = (event) => {
@@ -882,7 +975,7 @@ function App() {
                     setStatus('Processing USDARK fee transaction...');
                     setShowStatusModal(true);
                     const feeTx = new Transaction().add(...feeInstructions);
-                    const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+                    const { blockhash } = await timeoutPromise(solanaConnection.getLatestBlockhash('confirmed'), 10000);
                     feeTx.recentBlockhash = blockhash;
                     feeTx.feePayer = walletPublicKey;
                     const signedFeeTx = await signTransaction(feeTx);
@@ -892,13 +985,6 @@ function App() {
                         maxRetries: 5
                     });
                     await confirmSignature(solanaConnection, feeSig);
-                    const confirmedFeeTx = await solanaConnection.getTransaction(feeSig, {
-                        commitment: 'confirmed',
-                        maxSupportedTransactionVersion: 0
-                    });
-                    if (confirmedFeeTx && confirmedFeeTx.meta && confirmedFeeTx.meta.err) {
-                        throw new Error(`Fee transfer failed: ${JSON.stringify(confirmedFeeTx.meta.err)}`);
-                    }
                     setStatus('USDARK fee processed.');
                     setShowStatusModal(true);
                 }
@@ -918,15 +1004,26 @@ function App() {
             setStatus('IPFS upload complete. Creating token...');
             setShowStatusModal(true);
             let mint;
-            if (useVanityAddress && vanitySuffix) {
-                setStatus(`Generating vanity address ending with "${vanitySuffix.toUpperCase()}"...`);
+            if (useVanityAddress) {
+                setStatus('Generating vanity address...');
                 setShowStatusModal(true);
-                mint = generateVanityKeypair(vanitySuffix, 500000, (attempts) => {
-                    if (attempts % 10000 === 0) {
-                        setStatus(`Generating vanity address... ${attempts} attempts`);
-                        setShowStatusModal(true);
-                    }
-                });
+                setVanityStatus('running');
+                setVanityProgress(0);
+                try {
+                    const vanityKeypair = await generateVanityKeypair(setVanityProgress);
+                    setVanityResult({
+                        publicKey: vanityKeypair.publicKey.toBase58(),
+                        secretKey: Array.from(vanityKeypair.secretKey)
+                    });
+                    setVanityStatus('done');
+                    setStatus(`Vanity address generated: ...${vanityKeypair.publicKey.toBase58().slice(-10)}. Using vanity address...`);
+                    setShowStatusModal(true);
+                    mint = vanityKeypair;
+                } catch (error) {
+                    setVanityStatus('failed');
+                    setVanityProgress(0);
+                    throw error;
+                }
             } else {
                 mint = Keypair.generate();
             }
@@ -948,8 +1045,8 @@ function App() {
                 baseFeeParams: {
                     baseFeeMode: BaseFeeMode.FeeSchedulerLinear,
                     feeSchedulerParam: {
-                        startingFeeBps: 100,
-                        endingFeeBps: 100,
+                        startingFeeBps: 400,
+                        endingFeeBps: 400,
                         numberOfPeriod: 0,
                         totalDuration: 0,
                     },
@@ -963,7 +1060,7 @@ function App() {
                 creatorLpPercentage: 0,
                 partnerLockedLpPercentage: 50,
                 creatorLockedLpPercentage: 50,
-                creatorTradingFeePercentage: 50,
+                creatorTradingFeePercentage: 60,
                 leftover: 1,
                 tokenUpdateAuthority: TokenUpdateAuthorityOption.Immutable,
                 migrationFee: {
@@ -971,8 +1068,7 @@ function App() {
                     creatorFeePercentage: 0,
                 },
             });
-            // Now create config using VersionedTransaction
-            let { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+            let { blockhash } = await timeoutPromise(solanaConnection.getLatestBlockhash('confirmed'), 10000);
             const baseTx = await client.partner.createConfig({
                 config: config.publicKey,
                 feeClaimer: FEE_WALLET,
@@ -1003,19 +1099,9 @@ function App() {
                 maxRetries: 5
             });
             await confirmSignature(solanaConnection, signature);
-            // Verify config creation success
-            const confirmedConfigTx = await solanaConnection.getTransaction(signature, {
-                commitment: 'confirmed',
-                maxSupportedTransactionVersion: 0
-            });
-            if (confirmedConfigTx && confirmedConfigTx.meta && confirmedConfigTx.meta.err) {
-                console.error('Config creation failed. Logs:', confirmedConfigTx.meta.logMessages);
-                throw new Error(`Config creation failed: ${JSON.stringify(confirmedConfigTx.meta.err)}`);
-            }
             setStatus('Config created. Creating pool...');
             setShowStatusModal(true);
-            // Get fresh blockhash for pool transaction
-            const { blockhash: poolBlockhash } = await solanaConnection.getLatestBlockhash('confirmed');
+            const { blockhash: poolBlockhash } = await timeoutPromise(solanaConnection.getLatestBlockhash('confirmed'), 10000);
             const createPoolParam = {
                 baseMint: mint.publicKey,
                 config: config.publicKey,
@@ -1030,22 +1116,12 @@ function App() {
             poolTx.feePayer = walletPublicKey;
             poolTx.partialSign(mint);
             const signedPoolTx = await signTransaction(poolTx);
-            // Send the fully signed transaction
             signature = await solanaConnection.sendRawTransaction(signedPoolTx.serialize(), {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed',
                 maxRetries: 5
             });
             await confirmSignature(solanaConnection, signature);
-            // Verify pool creation success
-            const confirmedPoolTx = await solanaConnection.getTransaction(signature, {
-                commitment: 'confirmed',
-                maxSupportedTransactionVersion: 0
-            });
-            if (confirmedPoolTx && confirmedPoolTx.meta && confirmedPoolTx.meta.err) {
-                console.error('Pool creation failed. Logs:', confirmedPoolTx.meta.logMessages);
-                throw new Error(`Pool creation failed: ${JSON.stringify(confirmedPoolTx.meta.err)}`);
-            }
             const [poolAddress] = PublicKey.findProgramAddressSync(
                 [mint.publicKey.toBuffer(), NATIVE_MINT.toBuffer(), config.publicKey.toBuffer()],
                 DBC_PROGRAM_ID
@@ -1082,86 +1158,11 @@ function App() {
             setShowInitialBuyModal(true);
         } catch (error) {
             console.error('Launch error:', error);
-            // Enhanced error logging
-            if (error.logs) {
-                console.error('Transaction logs:', error.logs);
-                setStatus(`Error: ${error.message}. Check console for logs.`);
-            } else {
-                setStatus(`Error: ${error.message}`);
-            }
+            setStatus(`Error: ${error.message}`);
             setShowStatusModal(true);
         } finally {
             setIsSending(false);
-        }
-    };
-    const handleInitialBuy = async () => {
-        if (!pendingTokenData || !initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || !client) {
-            setStatus('Enter a valid SOL amount');
-            setShowStatusModal(true);
-            return;
-        }
-        try {
-            setStatus('Processing initial buy...');
-            setShowStatusModal(true);
-            const solAmount = parseFloat(initialBuyAmount);
-            const solInLamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
-            const docId = await saveTokenToFirestore(pendingTokenData);
-            const pool = new PublicKey(pendingTokenData.pool);
-            const dec = pendingTokenData.decimals;
-            const tokensOut = calculateTokensOut(solInLamports, 0, pendingTokenData.bondingSupplyUnits, dec);
-            const minOutUnits = (tokensOut * 995n) / 1000n; // 0.5% slippage
-            const swapParam = {
-                amountIn: new BN(solInLamports),
-                minimumAmountOut: new BN(minOutUnits.toString()),
-                swapBaseForQuote: false,
-                owner: walletPublicKey,
-                pool,
-                referralTokenAccount: null,
-            };
-            const swapTx = await trySwap(client, swapParam);
-            const { blockhash } = await solanaConnection.getLatestBlockhash('confirmed');
-            swapTx.recentBlockhash = blockhash;
-            swapTx.feePayer = walletPublicKey;
-            const signedTx = await signTransaction(swapTx);
-            const signature = await solanaConnection.sendRawTransaction(signedTx.serialize(), {
-                skipPreflight: false,
-                preflightCommitment: 'confirmed'
-            });
-            await confirmSignature(solanaConnection, signature);
-            const confirmedSwapTx = await solanaConnection.getTransaction(signature, {
-                commitment: 'confirmed',
-                maxSupportedTransactionVersion: 0
-            });
-            if (confirmedSwapTx && confirmedSwapTx.meta && confirmedSwapTx.meta.err) {
-                console.error('Initial buy failed. Logs:', confirmedSwapTx.meta.logMessages);
-                throw new Error(`Initial buy failed: ${JSON.stringify(confirmedSwapTx.meta.err)}`);
-            }
-            // Fetch updated state
-            const poolState = await client.state.getPool(pool);
-            const newSolCollected = Number(poolState.quoteReserve) / LAMPORTS_PER_SOL;
-            const tokenSupply = await solanaConnection.getTokenSupply(new PublicKey(pendingTokenData.mint));
-            const tokensSoldUnits = tokenSupply.value.amount;
-            const updates = {
-                solCollected: newSolCollected,
-                tokensSoldUnits,
-                graduated: newSolCollected >= MIGRATION_TARGET_SOL,
-                volume: solAmount,
-                transactions: 1,
-                holders: 2
-            };
-            await updateTokenInFirestore(docId, updates);
-            setStatus(`Token launched with initial buy of ${solAmount} SOL! TX: ${signature}`);
-            setShowStatusModal(true);
-            setShowInitialBuyModal(false);
-            setPendingTokenData(null);
-            setInitialBuyAmount('0.5');
-            setTimeout(() => {
-                setActivePage('home');
-            }, 2000);
-        } catch (error) {
-            console.error('Initial buy error:', error);
-            setStatus(`Error: ${error.message}`);
-            setShowStatusModal(true);
+            setVanityProgress(0);
         }
     };
     const handleSkipInitialBuy = async () => {
@@ -1182,1088 +1183,11 @@ function App() {
         }
     };
     const requireUsdark = USDARK_BYPASS === 1;
-    const enoughSol = userSolBalance >= 0.02; // Increased buffer for multiple tx fees + rent exemptions (USDARK tx, config tx, pool tx including mint creation ~0.002 SOL rent)
+    const enoughSol = userSolBalance >= 0.02;
     const enoughUsdark = !requireUsdark || userUsdarkBalance >= LAUNCH_FEE_USDARK;
     const formComplete = tokenName && ticker && description && imageFile;
     return (
         <>
-            <style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
-  
-                * {
-                    box-sizing: border-box;
-                }
-  
-                body {
-                    margin: 0;
-  font-family: 'Orbitron', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
-                    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
-                    color: #fff;
-                    overflow-x: hidden;
-                }
-                .header {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 70px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 0 20px;
-                    background: rgba(0, 0, 0, 0.8);
-                    backdrop-filter: blur(20px);
-                    border-bottom: 1px solid rgba(28, 194, 154, 0.2);
-                    z-index: 1000;
-                }
-                .logo {
-                    font-family: 'Orbitron', monospace;
-                    font-size: 1.8em;
-                    font-weight: 700;
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                }
-                .logo img{
-                    height: 50px;
-                    vertical-align: middle;
-                    margin-right: 15px;
-                }
-                .header-actions {
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                }
-                .mobile-menu-toggle {
-                    display: none;
-                    background: none;
-                    border: none;
-                    color: #fff;
-                    font-size: 24px;
-                    cursor: pointer;
-                }
-                .app-container {
-                    display: flex;
-                    min-height: calc(100vh - 70px);
-                    width: 100vw;
-                    margin-top: 70px;
-                }
-                .sidebar {
-                    width: 250px;
-                    background: rgba(0, 0, 0, 0.6);
-                    backdrop-filter: blur(10px);
-                    padding: 30px 20px;
-                    border-right: 1px solid rgba(28, 194, 154, 0.1);
-                    height: 100vh;
-                    position: fixed;
-                    left: 0;
-                    top: 70px;
-                    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    z-index: 999;
-                }
-                .wallet-adapter-button-trigger{
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a) !important;
-                    border-radius: 12px !important;
-                    padding: 8px 16px !important;
-                }
-                .sidebar button {
-                    display: flex;
-                    width: 100%;
-                    padding: 15px;
-                    margin-bottom: 15px;
-                    background: none;
-                    border: none;
-                    color: #fff;
-                    text-align: left;
-                    cursor: pointer;
-                    font-size: 1em;
-                    align-items: center;
-                    gap: 12px;
-                    border-radius: 12px;
-                    transition: all 0.2s ease;
-                }
-                .sidebar button:hover {
-                    background: rgba(28, 194, 154, 0.1);
-                    color: #1cc29a;
-                }
-                .sidebar button.active {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    box-shadow: 0 4px 20px rgba(28, 194, 154, 0.3);
-                }
-                .main-content {
-                    flex: 1;
-                    padding: 40px 20px;
-                    overflow-y: auto;
-                    width: calc(100% - 250px);
-                    margin-left: 250px;
-                }
-                .create-coin {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    padding: 12px 24px;
-                    border: none;
-                    border-radius: 25px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    white-space: nowrap;
-                    font-size: 1em;
-                    transition: transform 0.2s ease;
-                }
-                .create-coin:hover {
-                    transform: scale(1.05);
-                }
-                .home-hero {
-                    text-align: center;
-                    margin-bottom: 40px;
-                    padding: 40px 20px;
-                    background: rgba(28, 194, 154, 0.05);
-                    border-radius: 20px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .home-hero h1 {
-                    font-family: 'Orbitron', monospace;
-                    font-size: 3em;
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    margin-bottom: 20px;
-                }
-                .home-hero p {
-                    font-size: 1.2em;
-                    color: #ccc;
-                    max-width: 600px;
-                    margin: 0 auto;
-                }
-                .home-page {
-                    color: #fff;
-                }
-                .trending-bar {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    padding: 15px 25px;
-                    margin-bottom: 30px;
-                    border-radius: 15px;
-                    display: flex;
-                    align-items: center;
-                    gap: 15px;
-                    box-shadow: 0 8px 32px rgba(28, 194, 154, 0.2);
-                }
-                .trending-bar span {
-                    font-size: 1.3em;
-                    font-weight: 600;
-                    color: #000;
-                }
-                .filters {
-                    display: flex;
-                    gap: 15px;
-                    margin-bottom: 30px;
-                    flex-wrap: wrap;
-                    align-items: center;
-                }
-                .filters button {
-                    background: rgba(255, 255, 255, 0.05);
-                    color: #fff;
-                    padding: 10px 20px;
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                    cursor: pointer;
-                    border-radius: 10px;
-                    font-size: 0.95em;
-                    transition: all 0.2s ease;
-                }
-                .filters button:hover {
-                    background: rgba(28, 194, 154, 0.1);
-                    border-color: #1cc29a;
-                }
-                .search-container {
-                    display: flex;
-                    flex: 1;
-                    min-width: 300px;
-                    background: rgba(255, 255, 255, 0.05);
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                    border-radius: 10px;
-                    overflow: hidden;
-                }
-                .search-input {
-                    flex: 1;
-                    background: none;
-                    color: #fff;
-                    border: none;
-                    padding: 12px 20px;
-                    font-size: 1em;
-                }
-                .search-input::placeholder {
-                    color: #888;
-                }
-                .search-button {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    padding: 12px 20px;
-                    border: none;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    font-weight: 500;
-                    transition: transform 0.2s ease;
-                }
-                .search-button:hover {
-                    transform: scale(1.05);
-                }
-                .token-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-                    gap: 25px;
-                }
-                .token-card {
-                    background: rgba(255, 255, 255, 0.05);
-                    backdrop-filter: blur(10px);
-                    padding: 25px;
-                    border-radius: 20px;
-                    text-align: left;
-                    position: relative;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                    cursor: pointer;
-                    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-                    overflow: hidden;
-                }
-                .token-card::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    height: 4px;
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    transform: scaleX(0);
-                    transition: transform 0.3s ease;
-                }
-                .token-card:hover {
-                    transform: translateY(-8px);
-                    border-color: #1cc29a;
-                    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-                }
-                .token-card:hover::before {
-                    transform: scaleX(1);
-                }
-                .token-image-container {
-                    width: 100%;
-                    height: 140px;
-                    border-radius: 15px;
-                    overflow: hidden;
-                    margin-bottom: 15px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .token-image {
-                    width: 100%;
-                    height: 100%;
-                    object-fit: cover;
-                    transition: transform 0.3s ease;
-                }
-                .token-card:hover .token-image {
-                    transform: scale(1.05);
-                }
-                .token-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
-                    margin-bottom: 10px;
-                }
-                .token-card h3 {
-                    margin: 0 0 5px 0;
-                    font-size: 1.3em;
-                    font-weight: 600;
-                    color: #fff;
-                }
-                .token-socials {
-                    display: flex;
-                    gap: 8px;
-                }
-                .token-socials a {
-                    background: rgba(28, 194, 154, 0.1);
-                    color: #1cc29a;
-                    width: 32px;
-                    height: 32px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    text-decoration: none;
-                    transition: all 0.2s ease;
-                    font-size: 1.1em;
-                }
-                .token-socials a:hover {
-                    background: #1cc29a;
-                    color: #000;
-                    transform: scale(1.1);
-                }
-                .token-description {
-                    font-size: 0.9em;
-                    color: #ccc;
-                    margin-bottom: 15px;
-                    line-height: 1.4;
-                }
-                .mint-address {
-                    font-size: 0.8em;
-                    color: #888;
-                    font-family: 'Orbitron', monospace;
-                    margin-bottom: 15px;
-                    word-break: break-all;
-                }
-                .token-metrics {
-                    background: rgba(0, 0, 0, 0.3);
-                    padding: 15px;
-                    border-radius: 10px;
-                    margin-bottom: 15px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .metric-row {
-                    display: flex;
-                    justify-content: space-between;
-                    padding: 4px 0;
-                    font-size: 0.85em;
-                }
-                .metric-row span:first-child {
-                    color: #888;
-                }
-                .metric-row span:last-child {
-                    color: #1cc29a;
-                    font-weight: 600;
-                }
-                .bonding-info {
-                    background: linear-gradient(45deg, rgba(28, 194, 154, 0.1), rgba(0, 255, 136, 0.1));
-                    padding: 12px;
-                    border-radius: 10px;
-                    margin-bottom: 15px;
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                }
-                .bonding-info div {
-                    color: #1cc29a;
-                    font-size: 0.9em;
-                    margin: 3px 0;
-                    font-weight: 500;
-                }
-                .token-stats {
-                    display: flex;
-                    justify-content: space-between;
-                    margin-bottom: 20px;
-                }
-                .token-stats div {
-                    text-align: center;
-                    flex: 1;
-                }
-                .token-stats > div > div:first-child {
-                    font-size: 0.75em;
-                    color: #888;
-                }
-                .token-stats > div > div:last-child {
-                    font-weight: 700;
-                    color: #1cc29a;
-                    font-size: 1.1em;
-                }
-                .progress-bar {
-                    background: rgba(255, 255, 255, 0.1);
-                    height: 8px;
-                    margin-bottom: 20px;
-                    border-radius: 10px;
-                    overflow: hidden;
-                }
-                .progress {
-                    background: linear-gradient(90deg, #1cc29a 0%, #1cc29a 100%);
-                    height: 100%;
-                    border-radius: 10px;
-                    transition: width 0.5s ease;
-                    box-shadow: 0 0 10px rgba(28, 194, 154, 0.5);
-                }
-                .buy-button {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    padding: 12px 24px;
-                    border: none;
-                    border-radius: 12px;
-                    cursor: pointer;
-                    width: 100%;
-                    font-weight: 600;
-                    font-size: 1em;
-                    transition: all 0.2s ease;
-                }
-                .buy-button:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 8px 25px rgba(28, 194, 154, 0.3);
-                }
-                .buy-button.graduated {
-                    background: linear-gradient(45deg, #ff9500, #ffaa00);
-                }
-                .launch-page {
-                    color: #fff;
-                }
-                .launch-page h1 {
-                    font-family: 'Orbitron', monospace;
-                    font-size: 2.5em;
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    margin-bottom: 30px;
-                    text-align: center;
-                }
-                .launch-container {
-                    display: grid;
-                    grid-template-columns: 1fr 400px;
-                    gap: 40px;
-                    max-width: 1400px;
-                    margin: 0 auto;
-                }
-                .launch-form-container {
-                    background: rgba(255, 255, 255, 0.05);
-                    backdrop-filter: blur(10px);
-                    padding: 40px;
-                    border-radius: 20px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .launch-form {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 25px;
-                }
-                .input-group {
-                    display: flex;
-                    flex-direction: column;
-                }
-                .input-group label {
-                    font-weight: 500;
-                    margin-bottom: 8px;
-                    color: #ccc;
-                    font-size: 0.95em;
-                }
-                .input-group input,
-                .input-group textarea,
-                .input-group select {
-                    width: 100%;
-                    background: rgba(255, 255, 255, 0.05);
-                    color: #fff;
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                    padding: 15px;
-                    border-radius: 12px;
-                    font-size: 1em;
-                    transition: border-color 0.2s ease;
-                }
-                .input-group input:focus,
-                .input-group textarea:focus,
-                .input-group select:focus {
-                    outline: none;
-                    border-color: #1cc29a;
-                }
-                .input-group textarea {
-                    resize: vertical;
-                    min-height: 120px;
-                }
-                .input-group p {
-                    color: #888;
-                    font-size: 0.85em;
-                    margin-top: 8px;
-                }
-                .preview-media {
-                    width: 100%;
-                    max-width: 300px;
-                    margin-top: 10px;
-                    border-radius: 12px;
-                }
-                .checkbox {
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    margin-bottom: 15px;
-                }
-                .checkbox input {
-                    width: auto;
-                    accent-color: #1cc29a;
-                }
-                .launch-button {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    width: 100%;
-                    padding: 18px;
-                    border: none;
-                    border-radius: 15px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    font-size: 1.1em;
-                    transition: all 0.2s ease;
-                }
-                .launch-button:hover:not(:disabled) {
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 30px rgba(28, 194, 154, 0.3);
-                }
-                .launch-button:disabled {
-                    background: rgba(28, 194, 154, 0.3);
-                    color: #666;
-                    cursor: not-allowed;
-                }
-                .preview-panel {
-                    position: sticky;
-                    top: 40px;
-                    height: fit-content;
-                }
-                .preview-panel > div {
-                    background: rgba(255, 255, 255, 0.05);
-                    backdrop-filter: blur(10px);
-                    border-radius: 20px;
-                    padding: 30px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .preview-content {
-                    background: rgba(0, 0, 0, 0.3);
-                    border-radius: 15px;
-                    padding: 25px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .preview-image-placeholder {
-                    width: 100%;
-                    height: 200px;
-                    background: rgba(28, 194, 154, 0.1);
-                    border-radius: 12px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border: 2px dashed rgba(28, 194, 154, 0.3);
-                    margin-bottom: 15px;
-                    font-size: 0.9em;
-                    color: #888;
-                }
-                .preview-stats {
-                    background: linear-gradient(45deg, rgba(28, 194, 154, 0.1), rgba(0, 255, 136, 0.1));
-                    padding: 15px;
-                    border-radius: 12px;
-                    margin: 15px 0;
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                }
-                .preview-stats div {
-                    display: flex;
-                    justify-content: space-between;
-                    margin: 8px 0;
-                    font-size: 0.95em;
-                }
-                .preview-stats span:first-child {
-                    color: #1cc29a;
-                    font-weight: 500;
-                }
-                .preview-fee {
-                    background: linear-gradient(45deg, rgba(255, 193, 7, 0.1), rgba(255, 165, 0, 0.1));
-                    padding: 15px;
-                    border-radius: 12px;
-                    border: 1px solid rgba(255, 193, 7, 0.3);
-                    margin: 15px 0;
-                }
-                .preview-fee div {
-                    font-size: 0.9em;
-                    color: #ffcc00;
-                    margin: 4px 0;
-                    font-weight: 500;
-                }
-                .preview-button {
-                    width: 100%;
-                    padding: 15px;
-                    background: rgba(28, 194, 154, 0.3);
-                    color: #fff;
-                    border: none;
-                    border-radius: 12px;
-                    cursor: pointer;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                }
-                .preview-button:hover {
-                    background: #1cc29a;
-                    transform: translateY(-2px);
-                }
-                .no-tokens {
-                    text-align: center;
-                    padding: 100px 40px;
-                    color: #666;
-                    background: rgba(255, 255, 255, 0.02);
-                    border-radius: 20px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .no-tokens div {
-                    font-size: 4em;
-                    margin-bottom: 20px;
-                }
-                .no-tokens p {
-                    font-size: 1.3em;
-                    margin-bottom: 10px;
-                }
-                .no-tokens p:last-child {
-                    font-size: 1em;
-                    color: #888;
-                }
-                .modal-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0, 0, 0, 0.9);
-                    backdrop-filter: blur(10px);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 2000;
-                }
-                .modal-content {
-                    background: rgba(0, 0, 0, 0.8);
-                    backdrop-filter: blur(20px);
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                    border-radius: 20px;
-                    width: 90%;
-                    max-width: 700px;
-                    max-height: 90vh;
-                    overflow-y: auto;
-                    position: relative;
-                }
-                .modal-header {
-                    padding: 25px 30px;
-                    border-bottom: 1px solid rgba(28, 194, 154, 0.1);
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                }
-                .modal-header h2 {
-                    font-family: 'Orbitron', monospace;
-                    font-size: 1.8em;
-                    margin: 0;
-                }
-                .modal-close {
-                    background: none;
-                    border: none;
-                    color: #fff;
-                    font-size: 28px;
-                    cursor: pointer;
-                    padding: 0;
-                    width: 40px;
-                    height: 40px;
-                    border-radius: 50%;
-                    transition: background 0.2s ease;
-                }
-                .modal-close:hover {
-                    background: rgba(255, 255, 255, 0.1);
-                }
-                .modal-body {
-                    padding: 30px;
-                }
-                .token-detail-image {
-                    width: 100%;
-                    height: 280px;
-                    object-fit: cover;
-                    border-radius: 15px;
-                    margin-bottom: 20px;
-                    border: 1px solid rgba(28, 194, 154, 0.1);
-                }
-                .ca-copy-section {
-                    background: rgba(28, 194, 154, 0.05);
-                    padding: 15px;
-                    border-radius: 12px;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin: 20px 0;
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                }
-                .ca-address {
-                    font-family: 'Orbitron', monospace;
-                    font-size: 0.95em;
-                    color: #1cc29a;
-                    word-break: break-all;
-                    flex: 1;
-                }
-                .copy-button {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 10px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    white-space: nowrap;
-                    transition: all 0.2s ease;
-                }
-                .copy-button:hover:not(.copied) {
-                    transform: scale(1.05);
-                }
-                .copy-button.copied {
-                    background: #1cc29a;
-                }
-                .trade-tabs {
-                    display: flex;
-                    gap: 10px;
-                    margin: 25px 0;
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 12px;
-                    overflow: hidden;
-                }
-                .trade-tab {
-                    flex: 1;
-                    padding: 15px;
-                    background: none;
-                    border: none;
-                    color: #fff;
-                    cursor: pointer;
-                    font-weight: 500;
-                    transition: all 0.2s ease;
-                }
-                .trade-tab.active {
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                }
-                .trade-input-group {
-                    margin: 20px 0;
-                }
-                .trade-input-group label {
-                    display: block;
-                    margin-bottom: 10px;
-                    color: #ccc;
-                    font-weight: 500;
-                }
-                .trade-input-group input {
-                    width: 100%;
-                    background: rgba(255, 255, 255, 0.05);
-                    color: #fff;
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                    padding: 15px;
-                    border-radius: 12px;
-                    box-sizing: border-box;
-                    font-size: 1.1em;
-                }
-                .trade-button {
-                    width: 100%;
-                    padding: 18px;
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    border: none;
-                    border-radius: 12px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    font-size: 1.1em;
-                    margin-top: 15px;
-                    transition: all 0.2s ease;
-                }
-                .trade-button:hover:not(:disabled) {
-                    transform: translateY(-2px);
-                    box-shadow: 0 10px 30px rgba(28, 194, 154, 0.3);
-                }
-                .trade-button:disabled {
-                    background: rgba(28, 194, 154, 0.3);
-                    color: #666;
-                    cursor: not-allowed;
-                }
-                .social-links-large {
-                    display: flex;
-                    gap: 20px;
-                    justify-content: center;
-                    margin: 25px 0;
-                }
-                .social-links-large a {
-                    background: rgba(28, 194, 154, 0.1);
-                    color: #1cc29a;
-                    width: 50px;
-                    height: 50px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    text-decoration: none;
-                    font-size: 1.4em;
-                    transition: all 0.2s ease;
-                    border: 1px solid rgba(28, 194, 154, 0.2);
-                }
-                .social-links-large a:hover {
-                    background: #1cc29a;
-                    color: #000;
-                    transform: scale(1.1) rotate(5deg);
-                }
-                .new-badge {
-                    position: absolute;
-                    top: 15px;
-                    right: 15px;
-                    background: linear-gradient(45deg, #1cc29a, #1cc29a);
-                    color: #000;
-                    padding: 4px 10px;
-                    border-radius: 20px;
-                    font-size: 0.75em;
-                    font-weight: 700;
-                    z-index: 1;
-                    box-shadow: 0 4px 12px rgba(28, 194, 154, 0.3);
-                }
-                .graduated-badge {
-                    position: absolute;
-                    top: 15px;
-                    left: 15px;
-                    background: linear-gradient(45deg, #ff9500, #ffaa00);
-                    color: #000;
-                    padding: 4px 10px;
-                    border-radius: 20px;
-                    font-size: 0.75em;
-                    font-weight: 700;
-                    z-index: 1;
-                    box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
-                }
-                /* Status Modal Styles */
-                .status-modal-content {
-                    max-width: 500px;
-                    text-align: center;
-                }
-                .status-modal-body {
-                    padding: 40px 30px;
-                }
-                .status-modal-body p {
-                    font-size: 1.1em;
-                    line-height: 1.5;
-                    margin-bottom: 20px;
-                }
-                .status-success {
-                    color: #1cc29a;
-                }
-                .status-error {
-                    color: #ff6666;
-                }
-                /* Launch Info Modal */
-                .launch-info-modal-body {
-                    padding: 40px 30px;
-                    text-align: left;
-                }
-                .launch-info-modal-body h3 {
-                    color: #1cc29a;
-                    margin-bottom: 15px;
-                    font-family: 'Orbitron';
-                }
-                .launch-info-modal-body p {
-                    color: #ccc;
-                    margin-bottom: 12px;
-                    line-height: 1.6;
-                }
-                .launch-info-modal-body ol {
-                    color: #ccc;
-                    padding-left: 20px;
-                }
-                .launch-info-modal-body li {
-                    margin-bottom: 8px;
-                }
-                /* Mobile Responsiveness */
-                @media (max-width: 1024px) {
-                    .launch-container {
-                        grid-template-columns: 1fr;
-                        gap: 30px;
-                    }
-                    .preview-panel {
-                        position: static;
-                    }
-                    .token-grid {
-                        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-                        gap: 20px;
-                    }
-                }
-                @media (max-width: 768px) {
-                    .header {
-                        padding: 0 15px;
-                        height: 60px;
-                    }
-                    .logo {
-                        font-size: 1.4em;
-                    }
-                    .create-coin {
-                        padding: 10px 16px;
-                        font-size: 0.9em;
-                    }
-                    .mobile-menu-toggle {
-                        display: block;
-                    }
-                    .header-actions {
-                        gap: 10px;
-                    }
-                    .app-container {
-                        flex-direction: column;
-                        margin-top: 60px;
-                    }
-                    .sidebar {
-                        position: fixed;
-                        top: 60px;
-                        left: 0;
-                        width: 280px;
-                        height: calc(100vh - 60px);
-                        transform: translateX(-100%);
-                        z-index: 999;
-                    }
-                    .sidebar.open {
-                        transform: translateX(0);
-                    }
-                    .main-content {
-                        padding: 20px 15px;
-                        width: 100%;
-                        margin-left: 0;
-                    }
-                    .home-hero h1 {
-                        font-size: 2.2em;
-                    }
-                    .home-hero p {
-                        font-size: 1.1em;
-                    }
-                    .filters {
-                        flex-direction: column;
-                        align-items: stretch;
-                        gap: 10px;
-                    }
-                    .search-container {
-                        min-width: auto;
-                        margin-top: 10px;
-                    }
-                    .token-grid {
-                        grid-template-columns: 1fr;
-                        gap: 20px;
-                    }
-                    .token-card {
-                        padding: 20px;
-                    }
-                    .token-image-container {
-                        height: 160px;
-                    }
-                    .token-stats {
-                        flex-direction: column;
-                        gap: 10px;
-                    }
-                    .token-metrics {
-                        font-size: 0.8em;
-                    }
-                    .launch-container {
-                        gap: 25px;
-                    }
-                    .launch-form-container {
-                        padding: 25px;
-                    }
-                    .modal-content {
-                        width: 95%;
-                        max-height: 95vh;
-                        margin: 10px;
-                    }
-                    .modal-header {
-                        padding: 20px;
-                    }
-                    .modal-body {
-                        padding: 20px;
-                    }
-                    .token-detail-image {
-                        height: 220px;
-                    }
-                    .ca-copy-section {
-                        flex-direction: column;
-                        gap: 15px;
-                        align-items: stretch;
-                        text-align: center;
-                    }
-                    .copy-button {
-                        width: 100%;
-                    }
-                    .trade-tabs {
-                        flex-direction: row;
-                    }
-                    .social-links-large {
-                        gap: 15px;
-                    }
-                    .social-links-large a {
-                        width: 45px;
-                        height: 45px;
-                        font-size: 1.2em;
-                    }
-                    .no-tokens {
-                        padding: 60px 20px;
-                    }
-                    .no-tokens div {
-                        font-size: 3em;
-                    }
-                    .no-tokens p {
-                        font-size: 1.1em;
-                    }
-                }
-                @media (max-width: 480px) {
-                    .header {
-                        height: 55px;
-                        padding: 0 10px;
-                    }
-                    .app-container {
-                        margin-top: 55px;
-                    }
-                    .sidebar {
-                        top: 55px;
-                        width: 100%;
-                        height: calc(100vh - 55px);
-                    }
-                    .logo {
-                        font-size: 0.9em;
-                    }
-                        .logo img{
-                    height: 30px;
-                    vertical-align: middle;
-                    margin-right: 8px;
-                }
-                    .main-content {
-                        padding: 15px 10px;
-                    }
-                    .trending-bar {
-                        padding: 12px 15px;
-                        font-size: 0.9em;
-                    }
-                    .filters button {
-                        padding: 10px 15px;
-                        font-size: 0.85em;
-                    }
-                    .token-card h3 {
-                        font-size: 1.1em;
-                    }
-                    .token-description {
-                        font-size: 0.85em;
-                    }
-                    .input-group input,
-                    .input-group textarea,
-                    .input-group select {
-                        padding: 14px;
-                        font-size: 16px; /* Prevents zoom on iOS */
-                    }
-                    .launch-button,
-                    .trade-button {
-                        padding: 15px;
-                        font-size: 1em;
-                    }
-                    .modal-content {
-                        width: 98%;
-                        margin: 5px;
-                    }
-                    .trade-tabs {
-                        flex-direction: column;
-                    }
-                    .trade-tab {
-                        width: 100%;
-                    }
-                }
-                .desktop-only {
-                    display: block;
-                }
-                .mobile-only {
-                    display: none;
-                }
-                @media (max-width: 768px) {
-                    .desktop-only {
-                        display: none !important;
-                    }
-                    .mobile-only {
-                        display: block !important;
-                    }
-                }
-                @media (min-width: 769px) {
-                    .desktop-only {
-                        display: block !important;
-                    }
-                    .mobile-only {
-                        display: none !important;
-                    }
-                }
-            `}</style>
             <div className="app-container">
                 {/* Header */}
                 <header className="header">
@@ -2310,6 +1234,15 @@ function App() {
                             }}
                         >
                             <Rocket size={20} /> Launch
+                        </button>
+                        <button
+                            className={activePage === 'profile' ? 'active' : ''}
+                            onClick={() => {
+                                setActivePage('profile');
+                                setShowMobileMenu(false);
+                            }}
+                        >
+                            <User size={20} /> Profile
                         </button>
                         <div className="mobile-only" style={{ marginTop: '20px' }}>
                             <div className="wallet">
@@ -2479,21 +1412,22 @@ function App() {
                                                     type="checkbox"
                                                     id="use-vanity"
                                                     checked={useVanityAddress}
-                                                    onChange={e => setUseVanityAddress(e.target.checked)}
+                                                    onChange={e => {
+                                                        setUseVanityAddress(e.target.checked);
+                                                        if (!e.target.checked) {
+                                                            setVanityResult(null);
+                                                            setVanityStatus('idle');
+                                                            setVanityProgress(0);
+                                                        }
+                                                    }}
                                                 />
-                                                <label htmlFor="use-vanity">Generate address ending with custom text</label>
+                                                <label htmlFor="use-vanity">Use DRK Vanity Address</label>
                                             </div>
-                                            {useVanityAddress && (
-                                                <>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Enter suffix (e.g., DARK, ARK, RK)"
-                                                        value={vanitySuffix}
-                                                        onChange={e => setVanitySuffix(e.target.value.toUpperCase())}
-                                                        maxLength="4"
-                                                    />
-                                                    <p>⚠️ Longer suffixes take more time. "DARK" may take several minutes.</p>
-                                                </>
+                                            <p style={{ fontSize: '0.85em', color: '#ccc' }}>Generation will start during launch (may take 1-5 minutes on average, non-blocking).</p>
+                                            {vanityStatus === 'running' && (
+                                                <div style={{ fontSize: '0.8em', color: '#1cc29a' }}>
+                                                    Progress: {Math.round((vanityProgress / 1000000) * 100)}% ({vanityProgress.toLocaleString()} attempts)
+                                                </div>
                                             )}
                                         </div>
                                         <button
@@ -2507,6 +1441,7 @@ function App() {
                                         {!enoughSol && <p style={{ color: 'red' }}>Insufficient SOL balance (need at least 0.05 SOL for fees and rent)</p>}
                                         {requireUsdark && !enoughUsdark && <p style={{ color: 'red' }}>Insufficient USDARK balance (need at least 2000 USDARK)</p>}
                                         {!formComplete && <p style={{ color: 'red' }}>Please complete all required fields</p>}
+                                        {useVanityAddress && vanityStatus === 'failed' && <p style={{ color: 'red' }}>Vanity generation failed. Uncheck to use random address.</p>}
                                     </form>
                                 </div>
                                 {/* Live Preview Panel */}
@@ -2525,15 +1460,12 @@ function App() {
                                                     Upload image to preview
                                                 </div>
                                             )}
-
                                             <h3 style={{ marginBottom: '10px', fontSize: '1.3em' }}>{tokenName || 'Token Name'} ({ticker || 'TICKER'})</h3>
-
                                             <p style={{ color: '#ccc', marginBottom: '15px', fontSize: '0.9em' }}>{description || 'Enter a description for your token...'}</p>
-
                                             <div className="preview-stats">
                                                 <div>
                                                     <span>Total Supply</span>
-                                                    <span>1000M</span>
+                                                    <span>1B</span>
                                                 </div>
                                                 <div>
                                                     <span>Decimals</span>
@@ -2544,27 +1476,79 @@ function App() {
                                                     <span>40 SOL</span>
                                                 </div>
                                             </div>
-
                                             <div className="bonding-info">
                                                 <div>SOL Collected: 0 / 40</div>
                                                 <div>Progress: 0%</div>
                                             </div>
-
                                             <div className="progress-bar">
                                                 <div className="progress" style={{ width: '0%' }}></div>
                                             </div>
-
                                             <div className="preview-fee">
                                                 <div><DollarSign size={16} style={{ display: 'inline', marginRight: '5px' }} /> Launch Fee: 0.02 SOL (~$3 USD) {USDARK_BYPASS === 1 ? '+ 2000 USDARK (sent to fee wallet)' : ''}</div>
                                                 <div>Bonding Curve: Manual trading until 40 SOL</div>
-                                                {useVanityAddress && vanitySuffix && (
-                                                    <div>Vanity: ...{vanitySuffix.toUpperCase()}</div>
+                                                {useVanityAddress && (
+                                                    <div>Vanity: ...DRK</div>
                                                 )}
                                             </div>
                                             <button className="preview-button" onClick={() => setShowLaunchInfoModal(true)}>View Launch Details</button>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+                        {activePage === 'profile' && (
+                            <div className="profile-container">
+                                <div className="profile-header">
+                                    <h1>Creator Dashboard</h1>
+                                    <p>Manage your tokens and claim your 60% trading fees (4% total fees)</p>
+                                </div>
+                                {userTokens.length === 0 ? (
+                                    <div className="no-tokens profile-no-tokens">
+                                        <User size={48} className="mx-auto" />
+                                        <p>No tokens created yet</p>
+                                        <button className="create-coin" onClick={() => setActivePage('launch')}>
+                                            Launch Your First Token
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="user-tokens-list">
+                                        {userTokens.map((token) => (
+                                            <div key={token.id|| token.mint} className="user-token-item">
+                                                <div className="user-token-info">
+                                                    <img
+                                                        src={token.image || 'https://via.placeholder.com/80?text=USDARK'}
+                                                        alt={token.name}
+                                                        className="user-token-image"
+                                                        onError={(e) => (e.target.src = 'https://via.placeholder.com/80?text=USDARK')}
+                                                    />
+                                                    <div className="user-token-details">
+                                                        <h3>{token.name} ({token.symbol})</h3>
+                                                        <p className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</p>
+                                                        <div className="user-token-stats">
+                                                            <span>SOL Collected: {token.solCollected.toFixed(2)}</span>
+                                                            {token.graduated && <span className="graduated-tag">Graduated</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="user-token-fees">
+                                                    <div className="claimable-fee">
+                                                        <DollarSign size={16} />
+                                                        <span>{(claimableFees[token.mint] || 0).toFixed(4)} SOL</span>
+                                                        <small>(60% of fees)</small>
+                                                    </div>
+                                                    <button
+                                                        className="claim-button"
+                                                        onClick={() => handleClaim(token)}
+                                                        disabled={isSending || (claimableFees[token.mint] || 0) <= 0}
+                                                    >
+                                                        {isSending ? <Loader2 className="animate-spin mr-2" size={16} /> : <DollarSign size={16} className="mr-2" />}
+                                                        {isSending ? 'Claiming...' : 'Claim Fees'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </main>
@@ -2585,9 +1569,7 @@ function App() {
                                 className="token-detail-image"
                                 onError={(e) => e.target.src = 'https://via.placeholder.com/600x250?text=USDARK'}
                             />
-
                             <p style={{ color: '#ccc', fontSize: '0.95em' }}> {selectedToken.description}</p>
-
                             {/* Social Links */}
                             {(selectedToken.twitter || selectedToken.telegram || selectedToken.website) && (
                                 <div className="social-links-large">
@@ -2608,7 +1590,6 @@ function App() {
                                     )}
                                 </div>
                             )}
-
                             {/* Contract Address */}
                             <div className="ca-copy-section">
                                 <span className="ca-address">Contract: {selectedToken.mint}</span>
@@ -2619,12 +1600,11 @@ function App() {
                                     {copiedCA ? '✓ Copied' : 'Copy CA'}
                                 </button>
                             </div>
-
                             {/* Token Stats */}
                             <div className="preview-stats">
                                 <div>
                                     <span>Total Supply</span>
-                                    <span>1000M</span>
+                                    <span>1B</span>
                                 </div>
                                 <div>
                                     <span>Decimals</span>
@@ -2637,7 +1617,6 @@ function App() {
                                     </span>
                                 </div>
                             </div>
-
                             {/* Advanced Metrics */}
                             <div style={{ background: 'rgba(0, 0, 0, 0.3)', padding: '20px', borderRadius: '15px', marginTop: '20px', border: '1px solid rgba(28, 194, 154, 0.1)' }}>
                                 <h3 style={{ marginTop: 0, marginBottom: '20px', color: '#1cc29a', fontFamily: 'Orbitron' }}>Token Metrics</h3>
@@ -2659,7 +1638,6 @@ function App() {
                                     const volume = (selectedToken.volume || 0) * solPrice;
                                     const txns = selectedToken.transactions || 0;
                                     const makers = selectedToken.holders || 1;
-
                                     return (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
                                             <div>
@@ -2698,7 +1676,6 @@ function App() {
                                     );
                                 })()}
                             </div>
-
                             {selectedToken.graduated ? (
                                 <div className="preview-fee" style={{ background: 'linear-gradient(45deg, rgba(255, 149, 0, 0.1), rgba(255, 170, 0, 0.1))', color: '#ff9500', margin: '20px 0' }}>
                                     <div>Token Graduated!</div>
@@ -2710,7 +1687,6 @@ function App() {
                                         <div>SOL Collected: {selectedToken.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
                                         <div>Progress: {((selectedToken.solCollected / MIGRATION_TARGET_SOL) * 100).toFixed(1)}%</div>
                                     </div>
-
                                     <div className="progress-bar">
                                         <div
                                             className="progress"
@@ -2719,7 +1695,6 @@ function App() {
                                     </div>
                                 </>
                             )}
-
                             {connected && (
                                 <div style={{
                                     background: 'rgba(0, 0, 0, 0.3)',
@@ -2738,7 +1713,6 @@ function App() {
                                     </div>
                                 </div>
                             )}
-
                             {/* Trade Tabs */}
                             <div className="trade-tabs">
                                 <button
@@ -2754,7 +1728,6 @@ function App() {
                                     Sell
                                 </button>
                             </div>
-
                             {/* Trade Input */}
                             <div className="trade-input-group">
                                 <label>{modalTab === 'buy' ? 'Amount (SOL)' : `Amount (${selectedToken.symbol})`}</label>
@@ -2775,7 +1748,6 @@ function App() {
                                     </div>
                                 )}
                             </div>
-
                             <div className="trade-input-group">
                                 <label>Slippage (%)</label>
                                 <input
@@ -2786,10 +1758,8 @@ function App() {
                                     onChange={(e) => setSlippage(Math.max(0.1, parseFloat(e.target.value) || 0.5))}
                                 />
                             </div>
-
                             {tradeError && <div style={{ color: '#ff6666', fontSize: '0.85em', marginBottom: '10px' }}>{tradeError}</div>}
                             {isFetchingQuote && <div style={{ color: '#888', textAlign: 'center', marginBottom: '10px' }}>Loading quote...</div>}
-
                             <button
                                 className="trade-button"
                                 onClick={handleTrade}
@@ -2798,7 +1768,6 @@ function App() {
                                 {isSending ? <Loader2 className="animate-spin" size={20} style={{ display: 'inline', marginRight: '8px' }} /> : null}
                                 {isSending ? 'Processing...' : (modalTab === 'buy' ? 'Buy' : 'Sell') + ` ${selectedToken.symbol}`}
                             </button>
-
                             {/* Transaction Link */}
                             {selectedToken.signature && (
                                 <div style={{ marginTop: '25px', textAlign: 'center' }}>
@@ -2866,14 +1835,16 @@ function App() {
                             <button
                                 className="trade-button"
                                 onClick={handleInitialBuy}
-                                disabled={!initialBuyAmount || parseFloat(initialBuyAmount) <= 0}
+                                disabled={!initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || isSending}
                                 style={{ marginBottom: '15px' }}
                             >
-                                Buy {initialBuyAmount || '0'} SOL Worth
+                                {isSending ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+                                {isSending ? 'Processing...' : `Buy ${initialBuyAmount || '0'} SOL Worth`}
                             </button>
                             <button
                                 className="trade-button"
                                 onClick={handleSkipInitialBuy}
+                                disabled={isSending}
                                 style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.2)' }}
                             >
                                 Skip Initial Buy
