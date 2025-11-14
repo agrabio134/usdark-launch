@@ -1654,7 +1654,7 @@ function App() {
                                             </div>
                                             <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Market Cap</div>
-                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${marketCap.toFixed(2)}</div>
+                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${fdv.toFixed(2)}</div>
                                             </div>
                                             <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>FDV</div>
@@ -1668,17 +1668,17 @@ function App() {
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Volume (24h)</div>
                                                 <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${volume.toFixed(2)}</div>
                                             </div>
-                                            <div>
+                                            {/* <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Transactions</div>
                                                 <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{txns}</div>
-                                            </div>
-                                            <div>
+                                            </div> */}
+                                            {/* <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Holders</div>
                                                 <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{makers}</div>
-                                            </div>
+                                            </div> */}
                                             <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Circulating Supply</div>
-                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{circulatingTokens.toFixed(0)}M</div>
+                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{TOTAL_SUPPLY_TOKENS.toFixed(0)}</div>
                                             </div>
                                         </div>
                                     );
