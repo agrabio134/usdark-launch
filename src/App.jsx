@@ -750,7 +750,7 @@ function App() {
         setStatus(`Processing ${modalTab}...`);
         setShowStatusModal(true);
         try {
-            if (selectedToken.graduated) {
+            // if (selectedToken.graduated) {
                 const isUsdark = selectedToken.mint === USDARK_MINT.toBase58();
                 const inputMint = modalTab === 'buy' ? NATIVE_MINT.toString() : selectedToken.mint;
                 const outputMint = modalTab === 'buy' ? selectedToken.mint : NATIVE_MINT.toString();
@@ -794,10 +794,10 @@ function App() {
                 const txid = await solanaConnection.sendRawTransaction(signed.serialize(), { skipPreflight: false, preflightCommitment: 'confirmed' });
                 await confirmSignature(solanaConnection, txid);
                 setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${txid}`);
-            } else {
-                const sig = await handleBondingTrade(selectedToken, modalTab === 'buy', parseFloat(tradeAmount));
-                setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${sig}`);
-            }
+            // } else {
+            //     const sig = await handleBondingTrade(selectedToken, modalTab === 'buy', parseFloat(tradeAmount));
+            //     setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${sig}`);
+            // }
             setTradeAmount('');
             setOutputAmount('');
             const newSol = await solanaConnection.getBalance(walletPublicKey);
@@ -1842,7 +1842,7 @@ function App() {
                             </div>
                             <button
                                 className="trade-button"
-                                onClick={handleInitialBuy}
+                                onClick={handleTrade}
                                 disabled={!initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || isSending}
                                 style={{ marginBottom: '15px' }}
                             >
