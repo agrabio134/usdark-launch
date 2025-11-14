@@ -1508,7 +1508,7 @@ function App() {
                             <div className="profile-container">
                                 <div className="profile-header">
                                     <h1>Creator Dashboard</h1>
-                                    <p>Manage your tokens and claim your 60% trading fees (4% total fees)</p>
+                                    <p>Manage your tokens and claim your trading fees</p>
                                 </div>
                                 {userTokens.length === 0 ? (
                                     <div className="no-tokens profile-no-tokens">
@@ -1542,7 +1542,7 @@ function App() {
                                                     <div className="claimable-fee">
                                                         <DollarSign size={16} />
                                                         <span>{(claimableFees[token.mint] || 0).toFixed(4)} SOL</span>
-                                                        <small>(60% of fees)</small>
+                                                        {/* <small>(60% of fees)</small> */}
                                                     </div>
                                                     <button
                                                         className="claim-button"
