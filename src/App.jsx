@@ -362,7 +362,7 @@ function App() {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
     const [decimals, setDecimals] = useState(6);
-    const [useVanityAddress, setUseVanityAddress] = useState(false);
+    const [useVanityAddress, setUseVanityAddress] = useState(true);
     const [vanityStatus, setVanityStatus] = useState('idle');
     const [vanityProgress, setVanityProgress] = useState(0);
     const [vanityResult, setVanityResult] = useState(null);
