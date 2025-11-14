@@ -5,7 +5,6 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
 import App from './App';
 import './index.css'; // Global CSS (we'll create this next)
-import './App.css'; // Global CSS (we'll create this next)
 import './profile.css'; // ← NEWLY ADDED
 
 const wallets = [new PhantomWalletAdapter()];
