@@ -1456,6 +1456,15 @@ body {
     height: calc(100vh - 55px);
   }
 
+  .sidebar button {
+    padding: 12px 15px;
+    font-size: 0.95em;
+  }
+
+  .sidebar button svg{
+    margin-right: 3.4px;
+  }
+
   .logo {
     font-size: 0.9em;
   }
