@@ -1250,7 +1250,7 @@ function App() {
                         >
                             <User size={20} /> Profile
                         </button>
-                        <div className="mobile-only" style={{ marginTop: '-10px' }}>
+                        <div className="mobile-only" style={{ marginTop: '-19px' }}>
                             <div className={`wallet ${!connected ? 'has-icon' : ''}`}>
                                 {!connected && <Wallet size={20} />}
 
