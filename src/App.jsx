@@ -222,6 +222,18 @@ const fetchTokenMetrics = async (mint) => {
     }
     return null;
 };
+const timeAgo = (timestamp) => {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+};
 const TokenCard = ({ token, onAction, solPrice, metrics }) => {
     const isNew = token.timestamp && (Date.now() - token.timestamp < 3600000);
     const progress = token.graduated ? 100 : (token.solCollected / MIGRATION_TARGET_SOL) * 100;
@@ -237,19 +249,11 @@ const TokenCard = ({ token, onAction, solPrice, metrics }) => {
     const tokenPrice = priceSol * solPrice;
     const circulatingTokens = Number(BigInt(tokensSoldUnits) / pow10);
     const marketCap = circulatingTokens * tokenPrice;
-    const fdv = TOTAL_SUPPLY_TOKENS * tokenPrice;
-    const liquidity = token.solCollected * solPrice;
     let displayPrice = tokenPrice;
     let displayMcap = marketCap;
-    let displayFdv = fdv;
-    let displayLiquidity = liquidity;
-    let displayVolume = token.solCollected * solPrice;
     if (token.graduated && metrics) {
         displayPrice = metrics.priceUsd || tokenPrice;
         displayMcap = metrics.mcap || (TOTAL_SUPPLY_TOKENS * displayPrice);
-        displayFdv = metrics.fdv || (TOTAL_SUPPLY_TOKENS * displayPrice);
-        displayLiquidity = metrics.liquidity || liquidity;
-        displayVolume = metrics.volume24h || (token.solCollected * solPrice);
     }
     return (
         <div className="token-card" onClick={() => onAction(token, 'view')}>
@@ -264,70 +268,31 @@ const TokenCard = ({ token, onAction, solPrice, metrics }) => {
                 />
             </div>
             <div className="token-header">
-                <h3>{token.name} ({token.symbol})</h3>
-                <div className="token-socials">
-                    {token.twitter && (
-                        <a href={token.twitter} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <Twitter size={16} />
-                        </a>
-                    )}
-                    {token.telegram && (
-                        <a href={token.telegram} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <Send size={16} />
-                        </a>
-                    )}
-                    {token.website && (
-                        <a href={token.website} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
-                            <Globe size={16} />
-                        </a>
-                    )}
-                </div>
+                <h3>{token.name}</h3>
             </div>
-            <p className="token-description">{token.description?.substring(0, 100)}{token.description?.length > 100 ? '...' : ''}</p>
-            <div className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</div>
+            <div className="creator-address">
+                Creator: {token.creator.substring(0, 6)}...{token.creator.slice(-6)}
+            </div>
+            <div className="time-launched">
+                Launched: {timeAgo(token.timestamp)}
+            </div>
             <div className="token-metrics">
                 <div className="metric-row">
-                    <span>Price:</span>
-                    <span>${displayPrice > 0 ? displayPrice.toFixed(8) : '0.00000000'}</span>
-                </div>
-                <div className="metric-row">
-                    <span>MCap:</span>
+                    <span>MC:</span>
                     <span>${displayMcap.toFixed(2)}</span>
                 </div>
                 <div className="metric-row">
-                    <span>FDV:</span>
-                    <span>${displayFdv.toFixed(2)}</span>
-                </div>
-                <div className="metric-row">
-                    <span>Liquidity:</span>
-                    <span>${displayLiquidity.toFixed(2)}</span>
-                </div>
-                <div className="metric-row">
-                    <span>Volume:</span>
-                    <span>${displayVolume.toFixed(2)}</span>
+                    <span>$:</span>
+                    <span>${displayPrice > 0 ? displayPrice.toFixed(8) : '0.00000000'}</span>
                 </div>
             </div>
             {!token.graduated && (
                 <>
-                    <div className="bonding-info">
-                        <div>SOL Collected: {token.solCollected.toFixed(2)} / {MIGRATION_TARGET_SOL}</div>
-                        <div>Progress: {progress.toFixed(1)}%</div>
-                    </div>
                     <div className="progress-bar">
                         <div className="progress" style={{ width: `${Math.min(progress, 100)}%` }}></div>
                     </div>
                 </>
             )}
-            <div className="token-stats">
-                <div>
-                    <div>Supply</div>
-                    <div>1B</div>
-                </div>
-                <div>
-                    <div>Holders</div>
-                    <div>{token.holders || 0}</div>
-                </div>
-            </div>
             <button
                 className="buy-button"
                 onClick={(e) => {
@@ -853,7 +818,7 @@ function App() {
         setStatus(`Processing ${modalTab}...`);
         setShowStatusModal(true);
         try {
-            if (selectedToken.graduated) {
+            // if (selectedToken.graduated) {
                 const isUsdark = selectedToken.mint === USDARK_MINT.toBase58();
                 const inputMint = modalTab === 'buy' ? NATIVE_MINT.toString() : selectedToken.mint;
                 const outputMint = modalTab === 'buy' ? selectedToken.mint : NATIVE_MINT.toString();
@@ -902,7 +867,8 @@ function App() {
                 if (newMetrics) {
                     setTokenMetrics(prev => ({ ...prev, [selectedToken.mint]: newMetrics }));
                 }
-            } else {
+            // } 
+            else {
                 const sig = await handleBondingTrade(selectedToken, modalTab === 'buy', parseFloat(tradeAmount));
                 setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${sig}`);
             }
@@ -1008,6 +974,23 @@ function App() {
             setShowStatusModal(true);
         } finally {
             setIsSending(false);
+        }
+    };
+    const handleSkipInitialBuy = async () => {
+        try {
+            if (!pendingTokenData) return;
+            await saveTokenToFirestore(pendingTokenData);
+            setStatus('Token launched and saved! No initial buy.');
+            setShowStatusModal(true);
+            setShowInitialBuyModal(false);
+            setPendingTokenData(null);
+            setTimeout(() => {
+                setActivePage('home');
+            }, 2000);
+        } catch (error) {
+            console.error('Save error:', error);
+            setStatus(`Error saving token: ${error.message}`);
+            setShowStatusModal(true);
         }
     };
     const handleImageChange = (event) => {
@@ -1275,23 +1258,6 @@ function App() {
         } finally {
             setIsSending(false);
             setVanityProgress(0);
-        }
-    };
-    const handleSkipInitialBuy = async () => {
-        try {
-            if (!pendingTokenData) return;
-            await saveTokenToFirestore(pendingTokenData);
-            setStatus('Token launched and saved! No initial buy.');
-            setShowStatusModal(true);
-            setShowInitialBuyModal(false);
-            setPendingTokenData(null);
-            setTimeout(() => {
-                setActivePage('home');
-            }, 2000);
-        } catch (error) {
-            console.error('Save error:', error);
-            setStatus(`Error saving token: ${error.message}`);
-            setShowStatusModal(true);
         }
     };
     const requireUsdark = USDARK_BYPASS === 1;
@@ -1983,7 +1949,7 @@ function App() {
                             </div>
                             <button
                                 className="trade-button"
-                                onClick={handleInitialBuy}
+                                onClick={handleTrade}
                                 disabled={!initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || isSending}
                                 style={{ marginBottom: '15px' }}
                             >
