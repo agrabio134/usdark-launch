@@ -18,7 +18,7 @@ import {
 } from '@solana/spl-token';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { Home, Rocket, TrendingUp, Search, Menu, X, Info, DollarSign, Twitter, Send, Globe, Loader2, User } from 'lucide-react';
+import { Wallet, Home, Rocket, TrendingUp, Search, Menu, X, Info, DollarSign, Twitter, Send, Globe, Loader2, User } from 'lucide-react';
 import axios from 'axios';
 import '@solana/wallet-adapter-react-ui/styles.css';
 import { initializeApp } from 'firebase/app';
@@ -1215,6 +1215,7 @@ function App() {
                             {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
                         </button>
                         <div className="wallet desktop-only">
+                            {/* icon */}
                             <WalletMultiButton />
                         </div>
                     </div>
@@ -1249,8 +1250,10 @@ function App() {
                         >
                             <User size={20} /> Profile
                         </button>
-                        <div className="mobile-only" style={{ marginTop: '20px' }}>
-                            <div className="wallet">
+                        <div className="mobile-only" style={{ marginTop: '-10px' }}>
+                            <div className={`wallet ${!connected ? 'has-icon' : ''}`}>
+                                {!connected && <Wallet size={20} />}
+
                                 <WalletMultiButton />
                             </div>
                         </div>
@@ -1518,7 +1521,7 @@ function App() {
                                 ) : (
                                     <div className="user-tokens-list">
                                         {userTokens.map((token) => (
-                                            <div key={token.id|| token.mint} className="user-token-item">
+                                            <div key={token.id || token.mint} className="user-token-item">
                                                 <div className="user-token-info">
                                                     <img
                                                         src={token.image || 'https://via.placeholder.com/80?text=USDARK'}
