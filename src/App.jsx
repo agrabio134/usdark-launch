@@ -180,7 +180,49 @@ const calculateSolOut = (tokensInUnits, solReservesLamports, tokenReservesUnits,
     const solOut = effectiveSol - newEffectiveSol;
     return solOut;
 };
-const TokenCard = ({ token, onAction, solPrice }) => {
+const fetchHoldersCount = async (connection, mintStr) => {
+    const mint = new PublicKey(mintStr);
+    try {
+        const accounts = await connection.getProgramAccounts(TOKEN_PROGRAM_ID, {
+            filters: [
+                { memcmp: { offset: 0, bytes: mint.toBase58() } },
+                { dataSize: 165 }
+            ],
+            commitment: 'confirmed'
+        });
+        let count = 0;
+        for (const acc of accounts) {
+            const data = acc.account.data;
+            const amount = new BN(data.slice(64, 72), 'le');
+            if (amount.gt(new BN(0))) {
+                count++;
+            }
+        }
+        return count;
+    } catch (err) {
+        console.error('Error fetching holders:', err);
+        return 0;
+    }
+};
+const fetchTokenMetrics = async (mint) => {
+    try {
+        const res = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
+        if (res.data.pairs && res.data.pairs.length > 0) {
+            const pair = res.data.pairs[0];
+            return {
+                priceUsd: parseFloat(pair.priceUsd) || 0,
+                mcap: parseFloat(pair.marketCap) || 0,
+                fdv: parseFloat(pair.fdv) || 0,
+                liquidity: parseFloat(pair.liquidity?.usd) || 0,
+                volume24h: parseFloat(pair.volume?.h24) || 0,
+            };
+        }
+    } catch (e) {
+        console.error('Fetch metrics error:', e);
+    }
+    return null;
+};
+const TokenCard = ({ token, onAction, solPrice, metrics }) => {
     const isNew = token.timestamp && (Date.now() - token.timestamp < 3600000);
     const progress = token.graduated ? 100 : (token.solCollected / MIGRATION_TARGET_SOL) * 100;
     const virtualSol = 30;
@@ -197,6 +239,18 @@ const TokenCard = ({ token, onAction, solPrice }) => {
     const marketCap = circulatingTokens * tokenPrice;
     const fdv = TOTAL_SUPPLY_TOKENS * tokenPrice;
     const liquidity = token.solCollected * solPrice;
+    let displayPrice = tokenPrice;
+    let displayMcap = marketCap;
+    let displayFdv = fdv;
+    let displayLiquidity = liquidity;
+    let displayVolume = token.solCollected * solPrice;
+    if (token.graduated && metrics) {
+        displayPrice = metrics.priceUsd || tokenPrice;
+        displayMcap = metrics.mcap || (TOTAL_SUPPLY_TOKENS * displayPrice);
+        displayFdv = metrics.fdv || (TOTAL_SUPPLY_TOKENS * displayPrice);
+        displayLiquidity = metrics.liquidity || liquidity;
+        displayVolume = metrics.volume24h || (token.solCollected * solPrice);
+    }
     return (
         <div className="token-card" onClick={() => onAction(token, 'view')}>
             {isNew && <div className="new-badge">NEW</div>}
@@ -234,23 +288,23 @@ const TokenCard = ({ token, onAction, solPrice }) => {
             <div className="token-metrics">
                 <div className="metric-row">
                     <span>Price:</span>
-                    <span>${tokenPrice > 0 ? tokenPrice.toFixed(8) : '0.00000000'}</span>
+                    <span>${displayPrice > 0 ? displayPrice.toFixed(8) : '0.00000000'}</span>
                 </div>
                 <div className="metric-row">
                     <span>MCap:</span>
-                    <span>${marketCap.toFixed(2)}</span>
+                    <span>${displayMcap.toFixed(2)}</span>
                 </div>
                 <div className="metric-row">
                     <span>FDV:</span>
-                    <span>${fdv.toFixed(2)}</span>
+                    <span>${displayFdv.toFixed(2)}</span>
                 </div>
                 <div className="metric-row">
                     <span>Liquidity:</span>
-                    <span>${liquidity.toFixed(2)}</span>
+                    <span>${displayLiquidity.toFixed(2)}</span>
                 </div>
                 <div className="metric-row">
                     <span>Volume:</span>
-                    <span>${(token.volume || 0).toFixed(2)}</span>
+                    <span>${displayVolume.toFixed(2)}</span>
                 </div>
             </div>
             {!token.graduated && (
@@ -271,7 +325,7 @@ const TokenCard = ({ token, onAction, solPrice }) => {
                 </div>
                 <div>
                     <div>Holders</div>
-                    <div>{token.holders || 1}</div>
+                    <div>{token.holders || 0}</div>
                 </div>
             </div>
             <button
@@ -388,6 +442,7 @@ function App() {
     const [showLaunchInfoModal, setShowLaunchInfoModal] = useState(false);
     // Profile state
     const [claimableFees, setClaimableFees] = useState({});
+    const [tokenMetrics, setTokenMetrics] = useState({});
     const userTokens = useMemo(() => {
         return createdTokens.filter(token => token.creator === walletPublicKey?.toBase58());
     }, [createdTokens, walletPublicKey]);
@@ -434,6 +489,7 @@ function App() {
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
                 data.tokensSoldUnits = data.tokensSoldUnits || '0';
+                data.holders = data.holders || 0;
                 if (!uniqueMints.has(data.mint)) {
                     uniqueMints.add(data.mint);
                     tokens.push({ id: doc.id, ...data });
@@ -449,6 +505,23 @@ function App() {
         });
         return () => unsubscribe();
     }, [firebaseUser]);
+    useEffect(() => {
+        const fetchAllMetrics = async () => {
+            const graduatedTokens = createdTokens.filter(t => t.graduated).slice(0, 20);
+            const promises = graduatedTokens.map(async (t) => {
+                if (!tokenMetrics[t.mint]) {
+                    const m = await fetchTokenMetrics(t.mint);
+                    if (m) {
+                        setTokenMetrics(prev => ({ ...prev, [t.mint]: m }));
+                    }
+                }
+            });
+            await Promise.all(promises);
+        };
+        if (createdTokens.length > 0) {
+            fetchAllMetrics();
+        }
+    }, [createdTokens]);
     useEffect(() => {
         if (!solanaConnection || !client || !createdTokens.length) return;
         // Limit to recent 10 tokens to reduce polling load
@@ -485,7 +558,25 @@ function App() {
         return () => {
             if (pollInterval) clearInterval(pollInterval);
         };
-    }, [createdTokens, client, solanaConnection]);
+    }, [createdTokens, client, solanaConnection, solPrice]);
+    // Poll for holders count (for all tokens, limited to 20, every 30 seconds)
+    useEffect(() => {
+        if (!solanaConnection || !createdTokens.length) return;
+        const allTokens = createdTokens.slice(0, 20);
+        const holdersInterval = setInterval(async () => {
+            for (const token of allTokens) {
+                try {
+                    const holders = await fetchHoldersCount(solanaConnection, token.mint);
+                    if (holders !== token.holders && token.id) {
+                        await updateTokenInFirestore(token.id, { holders });
+                    }
+                } catch (err) {
+                    console.error('Error fetching holders for token:', token.mint, err);
+                }
+            }
+        }, 30000); // Poll every 30 seconds
+        return () => clearInterval(holdersInterval);
+    }, [createdTokens, solanaConnection]);
     // Fetch claimable fees for user tokens
     useEffect(() => {
         const fetchClaimables = async () => {
@@ -645,6 +736,12 @@ function App() {
             setOutputAmount('');
             setTradeError('');
             setSlippage(0.5);
+            if (token.graduated) {
+                const m = await fetchTokenMetrics(token.mint);
+                if (m) {
+                    setTokenMetrics(prev => ({ ...prev, [token.mint]: m }));
+                }
+            }
             if (connected && walletPublicKey && solanaConnection) {
                 try {
                     const solBal = await solanaConnection.getBalance(walletPublicKey);
@@ -669,6 +766,12 @@ function App() {
             setStatus('Token graduated! Use Raydium or Jupiter to trade.');
             setShowStatusModal(true);
             return;
+        }
+    };
+    const handleQuickAmount = (percent) => {
+        const balance = modalTab === 'buy' ? userSolBalance : userTokenBalance;
+        if (balance > 0) {
+            setTradeAmount((balance * (percent / 100)).toFixed(4));
         }
     };
     const handleCopyCA = (address) => {
@@ -750,7 +853,7 @@ function App() {
         setStatus(`Processing ${modalTab}...`);
         setShowStatusModal(true);
         try {
-            // if (selectedToken.graduated) {
+            if (selectedToken.graduated) {
                 const isUsdark = selectedToken.mint === USDARK_MINT.toBase58();
                 const inputMint = modalTab === 'buy' ? NATIVE_MINT.toString() : selectedToken.mint;
                 const outputMint = modalTab === 'buy' ? selectedToken.mint : NATIVE_MINT.toString();
@@ -794,10 +897,15 @@ function App() {
                 const txid = await solanaConnection.sendRawTransaction(signed.serialize(), { skipPreflight: false, preflightCommitment: 'confirmed' });
                 await confirmSignature(solanaConnection, txid);
                 setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${txid}`);
-            // } else {
-            //     const sig = await handleBondingTrade(selectedToken, modalTab === 'buy', parseFloat(tradeAmount));
-            //     setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${sig}`);
-            // }
+                // Refetch metrics after trade
+                const newMetrics = await fetchTokenMetrics(selectedToken.mint);
+                if (newMetrics) {
+                    setTokenMetrics(prev => ({ ...prev, [selectedToken.mint]: newMetrics }));
+                }
+            } else {
+                const sig = await handleBondingTrade(selectedToken, modalTab === 'buy', parseFloat(tradeAmount));
+                setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${sig}`);
+            }
             setTradeAmount('');
             setOutputAmount('');
             const newSol = await solanaConnection.getBalance(walletPublicKey);
@@ -1155,9 +1263,8 @@ function App() {
                 twitter: twitterUrl || '',
                 telegram: telegramUrl || '',
                 website: websiteUrl || '',
-                volume: 0,
                 transactions: 0,
-                holders: 1
+                holders: 0
             };
             setPendingTokenData(newToken);
             setShowInitialBuyModal(true);
@@ -1191,6 +1298,7 @@ function App() {
     const enoughSol = userSolBalance >= 0.02;
     const enoughUsdark = !requireUsdark || userUsdarkBalance >= LAUNCH_FEE_USDARK;
     const formComplete = tokenName && ticker && description && imageFile;
+    const currentBalance = modalTab === 'buy' ? userSolBalance : userTokenBalance;
     return (
         <>
             <div className="app-container">
@@ -1253,7 +1361,6 @@ function App() {
                         <div className="mobile-only" style={{ marginTop: '-19px' }}>
                             <div className={`wallet ${!connected ? 'has-icon' : ''}`}>
                                 {!connected && <Wallet size={20} />}
-
                                 <WalletMultiButton />
                             </div>
                         </div>
@@ -1310,6 +1417,7 @@ function App() {
                                                 token={token}
                                                 onAction={handleTokenAction}
                                                 solPrice={solPrice}
+                                                metrics={tokenMetrics[token.mint]}
                                             />
                                         ))}
                                     </div>
@@ -1638,23 +1746,41 @@ function App() {
                                     const effectiveSol = virtualSol + selectedToken.solCollected;
                                     const effectiveTokens = virtualTokens + remainingTokens;
                                     const priceSol = effectiveSol / effectiveTokens;
-                                    const tokenPrice = priceSol * solPrice;
+                                    const curvePrice = priceSol * solPrice;
                                     const circulatingTokens = Number(BigInt(tokensSoldUnits) / pow10);
-                                    const marketCap = circulatingTokens * tokenPrice;
-                                    const fdv = TOTAL_SUPPLY_TOKENS * tokenPrice;
-                                    const liquidity = selectedToken.solCollected * solPrice;
-                                    const volume = (selectedToken.volume || 0) * solPrice;
-                                    const txns = selectedToken.transactions || 0;
-                                    const makers = selectedToken.holders || 1;
+                                    const curveMcap = circulatingTokens * curvePrice;
+                                    const curveFdv = TOTAL_SUPPLY_TOKENS * curvePrice;
+                                    const curveLiquidity = selectedToken.solCollected * solPrice;
+                                    const curveVolume = selectedToken.solCollected * solPrice;
+                                    const curveCirculating = circulatingTokens;
+                                    const m = tokenMetrics[selectedToken.mint];
+                                    let price = curvePrice;
+                                    let mcap = curveMcap;
+                                    let fdv = curveFdv;
+                                    let liquidity = curveLiquidity;
+                                    let volume = curveVolume;
+                                    let circulating = curveCirculating;
+                                    let holders = selectedToken.holders || 0;
+                                    if (selectedToken.graduated && m) {
+                                        price = m.priceUsd || curvePrice;
+                                        mcap = m.mcap || (TOTAL_SUPPLY_TOKENS * price);
+                                        fdv = m.fdv || (TOTAL_SUPPLY_TOKENS * price);
+                                        liquidity = m.liquidity || curveLiquidity;
+                                        volume = m.volume24h || curveVolume;
+                                        circulating = TOTAL_SUPPLY_TOKENS;
+                                    } else {
+                                        circulating = circulatingTokens > 0 ? circulatingTokens : TOTAL_SUPPLY_TOKENS;
+                                        mcap = circulating * price;
+                                    }
                                     return (
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px' }}>
                                             <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Price (USD)</div>
-                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${tokenPrice > 0 ? tokenPrice.toFixed(8) : '0.00000000'}</div>
+                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${price > 0 ? price.toFixed(8) : '0.00000000'}</div>
                                             </div>
                                             <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Market Cap</div>
-                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${fdv.toFixed(2)}</div>
+                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${mcap.toFixed(2)}</div>
                                             </div>
                                             <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>FDV</div>
@@ -1668,17 +1794,13 @@ function App() {
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Volume (24h)</div>
                                                 <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>${volume.toFixed(2)}</div>
                                             </div>
-                                            {/* <div>
-                                                <div style={{ color: '#888', fontSize: '0.85em' }}>Transactions</div>
-                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{txns}</div>
-                                            </div> */}
-                                            {/* <div>
+                                            <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Holders</div>
-                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{makers}</div>
-                                            </div> */}
+                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{holders}</div>
+                                            </div>
                                             <div>
                                                 <div style={{ color: '#888', fontSize: '0.85em' }}>Circulating Supply</div>
-                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{TOTAL_SUPPLY_TOKENS.toFixed(0)}</div>
+                                                <div style={{ color: '#1cc29a', fontWeight: 'bold' }}>{circulating.toFixed(0)}</div>
                                             </div>
                                         </div>
                                     );
@@ -1748,13 +1870,32 @@ function App() {
                                     onChange={(e) => setTradeAmount(e.target.value)}
                                 />
                                 <p style={{ color: '#888', fontSize: '0.85em' }}>
-                                    Balance: {modalTab === 'buy' ? userSolBalance.toFixed(4) : userTokenBalance.toFixed(2)} {modalTab === 'buy' ? 'SOL' : selectedToken.symbol}
+                                    Balance: {currentBalance.toFixed(modalTab === 'buy' ? 4 : 2)} {modalTab === 'buy' ? 'SOL' : selectedToken.symbol}
                                 </p>
                                 {outputAmount && (
                                     <div style={{ color: '#1cc29a', fontSize: '0.95em', marginTop: '5px' }}>
                                         Output: {outputAmount} {modalTab === 'buy' ? selectedToken.symbol : 'SOL'}
                                     </div>
                                 )}
+                                <div className="quick-buttons" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px' }}>
+                                    {[25, 50, 75].map(p => (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => handleQuickAmount(p)}
+                                            style={{ flex: 1, padding: '5px 10px', marginRight: '5px', background: 'rgba(28, 194, 154, 0.2)', border: '1px solid #1cc29a', color: '#1cc29a', borderRadius: '4px' }}
+                                        >
+                                            {p}%
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleQuickAmount(100)}
+                                        style={{ padding: '5px 10px', background: 'rgba(28, 194, 154, 0.2)', border: '1px solid #1cc29a', color: '#1cc29a', borderRadius: '4px' }}
+                                    >
+                                        Max
+                                    </button>
+                                </div>
                             </div>
                             <div className="trade-input-group">
                                 <label>Slippage (%)</label>
@@ -1842,7 +1983,7 @@ function App() {
                             </div>
                             <button
                                 className="trade-button"
-                                onClick={handleTrade}
+                                onClick={handleInitialBuy}
                                 disabled={!initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || isSending}
                                 style={{ marginBottom: '15px' }}
                             >
