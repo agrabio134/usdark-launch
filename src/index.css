@@ -1456,7 +1456,7 @@ body {
     height: calc(100vh - 55px);
   }
 
-  .sidebar button {
+  .sidebar button { 
     padding: 12px 15px;
     font-size: 0.95em;
   }
