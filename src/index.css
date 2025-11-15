@@ -1453,12 +1453,12 @@ body {
   .sidebar {
     top: 55px;
     width: 100%;
-    height: calc(100vh - 55px);
+    height: calc(100vh - 55px); 
   }
 
   .sidebar button { 
     padding: 12px 15px;
-    font-size: 0.9em;
+    font-size: 0.83em;
   }
 
   .sidebar button svg{
