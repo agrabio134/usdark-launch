@@ -89,6 +89,7 @@ button:focus-visible {
 
 * {
   box-sizing: border-box;
+  
 }
 
 body {
@@ -169,7 +170,7 @@ body {
 
 .desktop-only .wallet-adapter-button-trigger {
   background: linear-gradient(45deg, #1cc29a, #1cc29a) !important;
-  font-family: 'Courier New', Courier, monospace;
+  
   font-size: 1em !important;
   border-radius: 12px !important;
   padding: 8px 16px !important;
@@ -1431,7 +1432,7 @@ body {
   }
 
   .wallet-adapter-button {
-        font-family: 'Courier New', Courier, monospace !important;
+  font-family: 'Orbitron', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
         /* margin-left: -1px !important; */
 
     margin-top: 17px !important;
@@ -1458,7 +1459,8 @@ body {
 
   .sidebar button { 
     padding: 12px 15px;
-    font-size: 0.83em;
+    font-size: 1.1em;
+    font-weight: 500;
   }
 
   .sidebar button svg{
