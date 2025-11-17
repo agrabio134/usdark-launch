@@ -342,7 +342,7 @@ body {
 
 .token-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 25px;
 }
 
@@ -382,12 +382,17 @@ body {
 }
 
 .token-image-container {
-  width: 100%;
+  width: 50%;
   height: 140px;
   border-radius: 15px;
   overflow: hidden;
   margin-bottom: 15px;
   border: 1px solid rgba(28, 194, 154, 0.1);
+
+  /* make this image center */
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .token-image {
