@@ -66,7 +66,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 let FEE_WALLET;
 try {
-    FEE_WALLET = new PublicKey('5o3YkaKpfC8oJAjwhzwSTjbCj9UN8PosfT4D1e1xMrZU');
+    FEE_WALLET = new PublicKey('9t2R1ZF27tnp811RevvUSS8vEy3EcPNSJG3CjfbFJC46');
 } catch (error) {
     console.error('Invalid FEE_WALLET address:', error);
     FEE_WALLET = new PublicKey('11111111111111111111111111111111');
