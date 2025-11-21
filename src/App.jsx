@@ -381,7 +381,7 @@ function App() {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState('');
     const [decimals, setDecimals] = useState(6);
-    const [useVanityAddress, setUseVanityAddress] = useState(true);
+    const [useVanityAddress, setUseVanityAddress] = useState(false);
     const [vanityStatus, setVanityStatus] = useState('idle');
     const [vanityProgress, setVanityProgress] = useState(0);
     const [vanityResult, setVanityResult] = useState(null);
@@ -1487,7 +1487,7 @@ function App() {
                                                 onChange={e => setWebsiteUrl(e.target.value)}
                                             />
                                         </div>
-                                        <div className="input-group">
+                                        {/* <div className="input-group">
                                             <label>Vanity Address (Optional)</label>
                                             <div className="checkbox">
                                                 <input
@@ -1511,7 +1511,7 @@ function App() {
                                                     Progress: {Math.round((vanityProgress / 1000000) * 100)}% ({vanityProgress.toLocaleString()} attempts)
                                                 </div>
                                             )}
-                                        </div>
+                                        </div> */}
                                         <button
                                             type="button"
                                             className="launch-button"
