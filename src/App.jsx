@@ -1,33 +1,19 @@
+// App.js
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-    Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL,
-    Keypair, TransactionInstruction, TransactionMessage, VersionedTransaction
-} from '@solana/web3.js';
-import {
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID,
-    createTransferInstruction,
-    createAssociatedTokenAccountInstruction,
-    getAssociatedTokenAddressSync,
-    createInitializeMintInstruction,
-    getMinimumBalanceForRentExemptMint,
-    createMintToInstruction,
-    createSetAuthorityInstruction,
-    NATIVE_MINT,
-    createBurnInstruction
-} from '@solana/spl-token';
+import { Connection, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, Keypair, TransactionInstruction, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createTransferInstruction, getAssociatedTokenAddressSync, NATIVE_MINT } from '@solana/spl-token';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Wallet, Home, Rocket, TrendingUp, Search, Menu, X, Info, DollarSign, Twitter, Send, Globe, Loader2, User } from 'lucide-react';
 import axios from 'axios';
 import '@solana/wallet-adapter-react-ui/styles.css';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, updateDoc, doc, onSnapshot } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, orderBy, updateDoc, doc, onSnapshot } from 'firebase/firestore';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import {
     DynamicBondingCurveClient,
     buildCurveWithMarketCap,
-    ActivationType,
+    ActivationType, 
     CollectFeeMode,
     BaseFeeMode,
     MigrationFeeOption,
@@ -37,322 +23,17 @@ import {
     TokenUpdateAuthorityOption
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import BN from 'bn.js';
-const NETWORKS = {
-    'devnet': [
-        'https://api.devnet.solana.com',
-        'https://devnet.solana.com',
-        'https://dawn-devnet.solana.com'
-    ],
-    'mainnet': [
-        'https://mainnet.helius-rpc.com/?api-key=a736e60e-52b8-469a-9f57-298d73076f3a', // Primary: Your Helius RPC
-        'https://solana.drpc.org/',
-        'https://solana-rpc.publicnode.com',
-        'https://api.mainnet-beta.solana.com',
-        'https://solana.lavenderfive.com/',
-        'https://solana.api.onfinality.io/public'
-    ]
-};
-const DEFAULT_NETWORK = 'mainnet';
-const firebaseConfig = {
-    apiKey: "AIzaSyBmF3F8CgYQfpqN6xSpeL0rkJvpshFLmwk",
-    authDomain: "usdark-launchpad.firebaseapp.com",
-    projectId: "usdark-launchpad",
-    storageBucket: "usdark-launchpad.firebasestorage.app",
-    messagingSenderId: "54701943971",
-    appId: "1:54701943971:web:295fa5465d713d28502316"
-};
+
+import HomePage from './pages/HomePage';
+import LaunchPage from './pages/LaunchPage';
+import ProfilePage from './pages/ProfilePage';
+import { firebaseConfig, DEFAULT_NETWORK, NETWORKS, FEE_WALLET, BASE_FEE, USDARK_MINT, USDARK_DECIMALS, LAUNCH_FEE_USDARK, USDARK_BYPASS, MIGRATION_TARGET_SOL, TOTAL_SUPPLY_TOKENS, BONDING_SUPPLY_TOKENS, DEX_SUPPLY_TOKENS, DBC_PROGRAM_ID, VIRTUAL_SOL_LAMPORTS, VIRTUAL_TOKENS_BASE } from './constants';
+import { uploadToIPFS, timeoutPromise, safeGetOrCreateATA, calculateTokensOut, calculateSolOut, fetchHoldersCount, fetchTokenMetrics, timeAgo, confirmSignature, generateVanityKeypair } from './utils';
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-let FEE_WALLET;
-try {
-    FEE_WALLET = new PublicKey('9t2R1ZF27tnp811RevvUSS8vEy3EcPNSJG3CjfbFJC46');
-} catch (error) {
-    console.error('Invalid FEE_WALLET address:', error);
-    FEE_WALLET = new PublicKey('11111111111111111111111111111111');
-}
-const BASE_FEE = 0.02 * LAMPORTS_PER_SOL;
-const PINATA_JWT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJhMTNlMDlhMy1hYmJjLTQwOWYtOTdmMi1mNGY0N2Y2ODUzZDYiLCJlbWFpbCI6ImFncmFiaW9oYXJ2ZXlAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsInBpbl9wb2xpY3kiOnsicmVnaW9ucyI6W3siZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiRlJBMSJ9LHsiZGVzaXJlZFJlcGxpY2F0aW9uQ291bnQiOjEsImlkIjoiTllDMSJ9XSwidmVyc2lvbiI6MX0sIm1mYV9lbmFibGVkIjpmYWxzZSwic3RhdHVzIjoiQUNUSVZFIn0sImF1dGhlbnRpY2F0aW9uVHlwZSI6InNjb3BlZEtleSIsInNjb3BlZEtleUtleSI6IjE2MTc1YTM5NTE5NWFmMWVjNjk5Iiwic2NvcGVkS2V5U2VjcmV0IjoiY2FjNWI4NmRjYjkxMzBlYWQ5NWM4MTZmMzk3ZWZiMWUyZTIwMzQxZjM1OGMxMzk5YTE0ZWYzYjczNjNkYmE0MSIsImV4cCI6MTc5MTg5MjU4NH0.ZRvRz1xkIvI0VN-Xd44ZdXSUEMhVyK-TaNFPk4BOZYs';
-const TOTAL_SUPPLY_TOKENS = 1000000000;
-const BONDING_SUPPLY_TOKENS = 800000000;
-const DEX_SUPPLY_TOKENS = 200000000;
-const MIGRATION_TARGET_SOL = 40;
-const VIRTUAL_SOL_LAMPORTS = BigInt(30 * LAMPORTS_PER_SOL);
-const VIRTUAL_TOKENS_BASE = 200000000n;
-const DBC_PROGRAM_ID = new PublicKey('dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN');
-const USDARK_MINT = new PublicKey('4EKDKWJDrqrCQtAD6j9sM5diTeZiKBepkEB8GLP9Dark');
-const USDARK_DECIMALS = 6;
-const LAUNCH_FEE_USDARK = 2000;
-const USDARK_BYPASS = 1;
-const uploadToPinata = async (data, options = { pinataMetadata: { name: 'metadata' } }) => {
-    const formData = new FormData();
-    if (data instanceof File) {
-        formData.append('file', data);
-    } else {
-        formData.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }), 'metadata.json');
-    }
-    Object.keys(options.pinataMetadata).forEach(key => {
-        formData.append(`pinataMetadata[${key}]`, options.pinataMetadata[key]);
-    });
-    try {
-        const response = await axios.post('https://api.pinata.cloud/pinning/pinFileToIPFS', formData, {
-            headers: {
-                'Authorization': `Bearer ${PINATA_JWT}`,
-                'Content-Type': 'multipart/form-data',
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-        });
-        return response.data.IpfsHash;
-    } catch (error) {
-        throw new Error(`Pinata upload failed: ${error.response?.data?.error || error.message}`);
-    }
-};
-const uploadToIPFS = async (imageFile, metadata, tokenName) => {
-    try {
-        let imageHash = '';
-        let imageUrl = '';
-        if (imageFile) {
-            imageHash = await uploadToPinata(imageFile, { pinataMetadata: { name: `${tokenName}_image` } });
-            imageUrl = `https://ipfs.io/ipfs/${imageHash}`;
-        }
-        metadata.image = imageUrl;
-        if (metadata.twitter) metadata.twitter = metadata.twitter;
-        if (metadata.telegram) metadata.telegram = metadata.telegram;
-        if (metadata.website) metadata.website = metadata.website;
-        const metadataHash = await uploadToPinata(metadata, { pinataMetadata: { name: `${tokenName}_metadata` } });
-        const metadataUri = `https://ipfs.io/ipfs/${metadataHash}`;
-        return { metadataUri, imageUrl };
-    } catch (error) {
-        console.error('Pinata upload error:', error);
-        throw new Error(`IPFS upload failed: ${error.message}`);
-    }
-};
-const timeoutPromise = (promise, ms) => {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms))
-    ]);
-};
-const safeGetOrCreateATA = async (connection, payer, mint, owner) => {
-    const ata = getAssociatedTokenAddressSync(mint, owner);
-    try {
-        const accountInfo = await timeoutPromise(connection.getAccountInfo(ata, 'confirmed'), 10000);
-        if (accountInfo && accountInfo.owner.equals(TOKEN_PROGRAM_ID)) {
-            return { address: ata };
-        } else {
-            const ix = createAssociatedTokenAccountInstruction(payer, ata, owner, mint);
-            return { address: ata, instruction: ix };
-        }
-    } catch (error) {
-        console.warn('getAccountInfo timed out or failed, assuming ATA does not exist:', error.message);
-        const ix = createAssociatedTokenAccountInstruction(payer, ata, owner, mint);
-        return { address: ata, instruction: ix };
-    }
-};
-const calculateTokensOut = (solInLamports, solReservesLamports, tokenReservesUnits, decimals) => {
-    const virtualTokens = VIRTUAL_TOKENS_BASE * (10n ** BigInt(decimals));
-    const solInBig = BigInt(solInLamports);
-    const fee = solInBig / 100n;
-    const solInNet = solInBig - fee;
-    const actualSol = BigInt(solReservesLamports);
-    const actualTokens = BigInt(tokenReservesUnits);
-    const effectiveSol = VIRTUAL_SOL_LAMPORTS + actualSol;
-    const effectiveTokens = virtualTokens + actualTokens;
-    const k = effectiveSol * effectiveTokens;
-    const newEffectiveSol = effectiveSol + solInNet;
-    const newEffectiveTokens = k / newEffectiveSol;
-    const tokensOut = effectiveTokens - newEffectiveTokens;
-    return tokensOut;
-};
-const calculateSolOut = (tokensInUnits, solReservesLamports, tokenReservesUnits, decimals) => {
-    const virtualTokens = VIRTUAL_TOKENS_BASE * (10n ** BigInt(decimals));
-    const tokensInBig = BigInt(tokensInUnits);
-    const fee = tokensInBig / 100n;
-    const tokensInNet = tokensInBig - fee;
-    const actualSol = BigInt(solReservesLamports);
-    const actualTokens = BigInt(tokenReservesUnits);
-    const effectiveSol = VIRTUAL_SOL_LAMPORTS + actualSol;
-    const effectiveTokens = virtualTokens + actualTokens;
-    const k = effectiveSol * effectiveTokens;
-    const newEffectiveTokens = effectiveTokens + tokensInNet;
-    const newEffectiveSol = k / newEffectiveTokens;
-    const solOut = effectiveSol - newEffectiveSol;
-    return solOut;
-};
-const fetchHoldersCount = async (connection, mintStr) => {
-    const mint = new PublicKey(mintStr);
-    try {
-        const accounts = await connection.getProgramAccounts(TOKEN_PROGRAM_ID, {
-            filters: [
-                { memcmp: { offset: 0, bytes: mint.toBase58() } },
-                { dataSize: 165 }
-            ],
-            commitment: 'confirmed'
-        });
-        let count = 0;
-        for (const acc of accounts) {
-            const data = acc.account.data;
-            const amount = new BN(data.slice(64, 72), 'le');
-            if (amount.gt(new BN(0))) {
-                count++;
-            }
-        }
-        return count;
-    } catch (err) {
-        console.error('Error fetching holders:', err);
-        return 0;
-    }
-};
-const fetchTokenMetrics = async (mint) => {
-    try {
-        const res = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${mint}`);
-        if (res.data.pairs && res.data.pairs.length > 0) {
-            const pair = res.data.pairs[0];
-            return {
-                priceUsd: parseFloat(pair.priceUsd) || 0,
-                mcap: parseFloat(pair.marketCap) || 0,
-                fdv: parseFloat(pair.fdv) || 0,
-                liquidity: parseFloat(pair.liquidity?.usd) || 0,
-                volume24h: parseFloat(pair.volume?.h24) || 0,
-            };
-        }
-    } catch (e) {
-        console.error('Fetch metrics error:', e);
-    }
-    return null;
-};
-const timeAgo = (timestamp) => {
-  const now = Date.now();
-  const diff = now - timestamp;
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-};
-const TokenCard = ({ token, onAction, solPrice, metrics }) => {
-    const isNew = token.timestamp && (Date.now() - token.timestamp < 3600000);
-    const progress = token.graduated ? 100 : (token.solCollected / MIGRATION_TARGET_SOL) * 100;
-    const virtualSol = 30;
-    const virtualTokens = 200000000;
-    const tokensSoldUnits = token.tokensSoldUnits || '0';
-    const decimalsBig = BigInt(token.decimals);
-    const pow10 = 10n ** decimalsBig;
-    const remainingTokens = BONDING_SUPPLY_TOKENS - Number(BigInt(tokensSoldUnits) / pow10);
-    const effectiveSol = virtualSol + token.solCollected;
-    const effectiveTokens = virtualTokens + remainingTokens;
-    const priceSol = effectiveSol / effectiveTokens;
-    const tokenPrice = priceSol * solPrice;
-    const circulatingTokens = Number(BigInt(tokensSoldUnits) / pow10);
-    const marketCap = circulatingTokens * tokenPrice;
-    let displayPrice = tokenPrice;
-    let displayMcap = marketCap;
-    if (token.graduated && metrics) {
-        displayPrice = metrics.priceUsd || tokenPrice;
-        displayMcap = metrics.mcap || (TOTAL_SUPPLY_TOKENS * displayPrice);
-    }
-    return (
-        <div className="token-card" onClick={() => onAction(token, 'view')}>
-            {isNew && <div className="new-badge">NEW</div>}
-            {token.graduated && <div className="graduated-badge">GRADUATED</div>}
-            <div className="token-image-container">
-                <img
-                    src={token.image || 'https://via.placeholder.com/200?text=USDARK'}
-                    alt={token.name}
-                    className="token-image"
-                    onError={(e) => e.target.src = 'https://via.placeholder.com/200?text=USDARK'}
-                />
-            </div>
-            <div className="token-header">
-                <h3>{token.name}</h3>
-            </div>
-            <div className="creator-address">
-                Creator: {token.creator.substring(0, 6)}...{token.creator.slice(-6)}
-            </div>
-            <div className="time-launched">
-                Launched: {timeAgo(token.timestamp)}
-            </div>
-            <div className="token-metrics">
-                <div className="metric-row">
-                    <span>MC:</span>
-                    <span>${displayMcap.toFixed(2)}</span>
-                </div>
-                <div className="metric-row">
-                    <span>$:</span>
-                    <span>${displayPrice > 0 ? displayPrice.toFixed(8) : '0.00000000'}</span>
-                </div>
-            </div>
-            {!token.graduated && (
-                <>
-                    <div className="progress-bar">
-                        <div className="progress" style={{ width: `${Math.min(progress, 100)}%` }}></div>
-                    </div>
-                </>
-            )}
-            <button
-                className="buy-button"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onAction(token, 'view');
-                }}
-            >
-                {token.graduated ? 'View Details' : 'Trade'}
-            </button>
-        </div>
-    );
-};
-const confirmSignature = async (connection, signature, commitment = 'confirmed') => {
-    let start = Date.now();
-    const timeout = 60 * 1000;
-    while (Date.now() - start < timeout) {
-        const statuses = await connection.getSignatureStatuses([signature]);
-        const status = statuses && statuses.value[0];
-        if (status) {
-            if (status.err) {
-                throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
-            }
-            if (status.confirmationStatus === commitment || status.confirmationStatus === 'finalized') {
-                return status;
-            }
-        }
-        await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-    throw new Error('Transaction confirmation timeout');
-};
-const generateVanityKeypair = (setProgress) => {
-    return new Promise((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 1000000;
-        const batchSize = 1000;
-        const generateBatch = () => {
-            if (attempts >= maxAttempts) {
-                reject(new Error(`Vanity generation failed after ${maxAttempts} attempts. Try again or uncheck the option.`));
-                return;
-            }
-            const start = attempts;
-            let found = false;
-            for (let i = 0; i < batchSize && attempts < maxAttempts; i++) {
-                attempts++;
-                const keypair = Keypair.generate();
-                const pubStr = keypair.publicKey.toBase58();
-                if (pubStr.toUpperCase().endsWith('DRK')) {
-                    resolve(keypair);
-                    found = true;
-                    break;
-                }
-            }
-            if (setProgress) setProgress(attempts);
-            if (!found) {
-                setTimeout(generateBatch, 0);
-            }
-        };
-        generateBatch();
-    });
-};
+
 function App() {
     const [network, setNetwork] = useState(DEFAULT_NETWORK);
     const [solanaConnection, setSolanaConnection] = useState(null);
@@ -867,7 +548,7 @@ function App() {
                 if (newMetrics) {
                     setTokenMetrics(prev => ({ ...prev, [selectedToken.mint]: newMetrics }));
                 }
-            // } 
+            // }
             else {
                 const sig = await handleBondingTrade(selectedToken, modalTab === 'buy', parseFloat(tradeAmount));
                 setStatus(`${modalTab.charAt(0).toUpperCase() + modalTab.slice(1)} successful! TX: ${sig}`);
@@ -1218,8 +899,12 @@ function App() {
                 maxRetries: 5
             });
             await confirmSignature(solanaConnection, signature);
+            const mintA = mint.publicKey;
+            const mintB = NATIVE_MINT;
+            const mint1 = Buffer.compare(mintA.toBuffer(), mintB.toBuffer()) < 0 ? mintA : mintB;
+            const mint2 = Buffer.compare(mintA.toBuffer(), mintB.toBuffer()) < 0 ? mintB : mintA;
             const [poolAddress] = PublicKey.findProgramAddressSync(
-                [mint.publicKey.toBuffer(), NATIVE_MINT.toBuffer(), config.publicKey.toBuffer()],
+                [mint1.toBuffer(), mint2.toBuffer(), config.publicKey.toBuffer()],
                 DBC_PROGRAM_ID
             );
             const bondingSupplyUnits = (BigInt(BONDING_SUPPLY_TOKENS) * (10n ** BigInt(decimals))).toString();
@@ -1260,9 +945,43 @@ function App() {
             setVanityProgress(0);
         }
     };
-    const requireUsdark = USDARK_BYPASS === 1;
+    const fetchPoolForMint = async (mintStr) => {
+        const mint = new PublicKey(mintStr);
+        const accounts = await solanaConnection.getProgramAccounts(DBC_PROGRAM_ID, {
+          filters: [
+            { memcmp: { offset: 40, bytes: mint.toBase58() } },
+          ],
+        });
+        if (accounts.length === 0) {
+          throw new Error('No pool found for this mint');
+        }
+        if (accounts.length > 1) {
+          throw new Error('Multiple pools found - manual review needed');
+        }
+        return accounts[0].pubkey.toBase58();
+      };
+   
+      const handleFixPool = async (token) => {
+        setIsSending(true);
+        setStatus('Fetching correct pool...');
+        setShowStatusModal(true);
+        try {
+          const correctPool = await fetchPoolForMint(token.mint);
+          if (correctPool === token.pool) {
+            setStatus('Pool is already correct');
+          } else {
+            await updateTokenInFirestore(token.id, { pool: correctPool });
+            setStatus(`Pool updated to ${correctPool}`);
+          }
+        } catch (err) {
+          setStatus(`Fix failed: ${err.message}`);
+        } finally {
+          setIsSending(false);
+          setShowStatusModal(true);
+        }
+      };
     const enoughSol = userSolBalance >= 0.02;
-    const enoughUsdark = !requireUsdark || userUsdarkBalance >= LAUNCH_FEE_USDARK;
+    const enoughUsdark = !USDARK_BYPASS || userUsdarkBalance >= LAUNCH_FEE_USDARK;
     const formComplete = tokenName && ticker && description && imageFile;
     const currentBalance = modalTab === 'buy' ? userSolBalance : userTokenBalance;
     return (
@@ -1334,304 +1053,59 @@ function App() {
                     {/* Main Content */}
                     <main className="main-content">
                         {activePage === 'home' && (
-                            <div className="home-page">
-                                {/* Hero Section */}
-                                <div className="home-hero">
-                                    <h1>Launch Your Token on Solana</h1>
-                                    <p>Experience fair launches with dynamic bonding curves. Powered by Meteora and USDARK protocol for maximum deflationary impact.</p>
-                                </div>
-                                {/* Trending Bar */}
-                                <div className="trending-bar">
-                                    <TrendingUp size={24} />
-                                    <span>RECENTLY LAUNCHED TOKENS</span>
-                                </div>
-                                {/* Filters */}
-                                <div className="filters">
-                                    <button>All Tokens ({filteredTokens.length})</button>
-                                    <button>Active ({filteredTokens.filter(t => !t.graduated).length})</button>
-                                    <button>Graduated ({filteredTokens.filter(t => t.graduated).length})</button>
-                                    <div className="search-container">
-                                        <input
-                                            type="text"
-                                            className="search-input"
-                                            placeholder="Search by name or ticker..."
-                                            value={searchQuery}
-                                            onChange={e => setSearchQuery(e.target.value)}
-                                        />
-                                        <button className="search-button">
-                                            <Search size={18} /> Search
-                                        </button>
-                                    </div>
-                                </div>
-                                {/* Token Grid */}
-                                {isLoadingTokens ? (
-                                    <div className="no-tokens">
-                                        <Loader2 size={48} className="animate-spin mx-auto" />
-                                        <p>Loading tokens from database...</p>
-                                    </div>
-                                ) : filteredTokens.length === 0 ? (
-                                    <div className="no-tokens">
-                                        <Rocket size={48} className="mx-auto" />
-                                        <p>No tokens found</p>
-                                        <p>Launch your first memecoin and join the USDARK revolution!</p>
-                                    </div>
-                                ) : (
-                                    <div className="token-grid">
-                                        {filteredTokens.map((token, index) => (
-                                            <TokenCard
-                                                key={token.id || token.mint || index}
-                                                token={token}
-                                                onAction={handleTokenAction}
-                                                solPrice={solPrice}
-                                                metrics={tokenMetrics[token.mint]}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <HomePage
+                                searchQuery={searchQuery}
+                                setSearchQuery={setSearchQuery}
+                                isLoadingTokens={isLoadingTokens}
+                                filteredTokens={filteredTokens}
+                                solPrice={solPrice}
+                                tokenMetrics={tokenMetrics}
+                                handleTokenAction={handleTokenAction}
+                            />
                         )}
                         {activePage === 'launch' && (
-                            <div className="launch-container">
-                                {/* Launch Form */}
-                                <div className="launch-form-container">
-                                    <h1>Launch Your Token</h1>
-                                    <form className="launch-form">
-                                        <div className="input-group">
-                                            <label>Name</label>
-                                            <input
-                                                type="text"
-                                                placeholder="Enter token name (max 32 chars)"
-                                                value={tokenName}
-                                                onChange={e => setTokenName(e.target.value)}
-                                                maxLength={32}
-                                            />
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Ticker</label>
-                                            <input
-                                                type="text"
-                                                placeholder="Enter ticker symbol (max 10 chars)"
-                                                value={ticker}
-                                                onChange={e => setTicker(e.target.value.toUpperCase())}
-                                                maxLength={10}
-                                            />
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Description</label>
-                                            <textarea
-                                                placeholder="Describe your token (max 1000 chars)"
-                                                value={description}
-                                                onChange={e => setDescription(e.target.value)}
-                                                maxLength={1000}
-                                            />
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Token Image</label>
-                                            <input
-                                                type="file"
-                                                accept="image/png,image/jpeg,image/gif"
-                                                onChange={handleImageChange}
-                                            />
-                                            {imagePreview && (
-                                                <img
-                                                    src={imagePreview}
-                                                    alt="Preview"
-                                                    className="preview-media"
-                                                />
-                                            )}
-                                            <p>PNG, JPG, GIF. Max 2MB</p>
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Decimals</label>
-                                            <select
-                                                value={decimals}
-                                                onChange={e => setDecimals(parseInt(e.target.value))}
-                                            >
-                                                <option value={6}>6</option>
-                                                <option value={9}>9</option>
-                                            </select>
-                                            <p>Choose between 6 or 9 decimals</p>
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Total Supply</label>
-                                            <p>Fixed: 1,000,000,000 tokens</p>
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Migration Target (SOL)</label>
-                                            <p>Fixed: 40 SOL. When this amount is collected, token graduates to DEX.</p>
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Twitter / X (Optional)</label>
-                                            <input
-                                                type="url"
-                                                placeholder="https://twitter.com/yourproject"
-                                                value={twitterUrl}
-                                                onChange={e => setTwitterUrl(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Telegram (Optional)</label>
-                                            <input
-                                                type="url"
-                                                placeholder="https://t.me/yourproject"
-                                                value={telegramUrl}
-                                                onChange={e => setTelegramUrl(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="input-group">
-                                            <label>Website (Optional)</label>
-                                            <input
-                                                type="url"
-                                                placeholder="https://yourproject.com"
-                                                value={websiteUrl}
-                                                onChange={e => setWebsiteUrl(e.target.value)}
-                                            />
-                                        </div>
-                                        {/* <div className="input-group">
-                                            <label>Vanity Address (Optional)</label>
-                                            <div className="checkbox">
-                                                <input
-                                                    type="checkbox"
-                                                    id="use-vanity"
-                                                    checked={useVanityAddress}
-                                                    onChange={e => {
-                                                        setUseVanityAddress(e.target.checked);
-                                                        if (!e.target.checked) {
-                                                            setVanityResult(null);
-                                                            setVanityStatus('idle');
-                                                            setVanityProgress(0);
-                                                        }
-                                                    }}
-                                                />
-                                                <label htmlFor="use-vanity">Use DRK Vanity Address</label>
-                                            </div>
-                                            <p style={{ fontSize: '0.85em', color: '#ccc' }}>Generation will start during launch (may take 1-5 minutes on average, non-blocking).</p>
-                                            {vanityStatus === 'running' && (
-                                                <div style={{ fontSize: '0.8em', color: '#1cc29a' }}>
-                                                    Progress: {Math.round((vanityProgress / 1000000) * 100)}% ({vanityProgress.toLocaleString()} attempts)
-                                                </div>
-                                            )}
-                                        </div> */}
-                                        <button
-                                            type="button"
-                                            className="launch-button"
-                                            onClick={handleLaunchToken}
-                                            disabled={isSending || !solanaConnection || !connected || !formComplete || !enoughSol || !enoughUsdark}
-                                        >
-                                            {isSending ? 'Launching...' : USDARK_BYPASS === 1 ? 'Launch Token (0.02 SOL + 2000 USDARK)' : 'Launch Token (0.02 SOL)'}
-                                        </button>
-                                        {!enoughSol && <p style={{ color: 'red' }}>Insufficient SOL balance (need at least 0.05 SOL for fees and rent)</p>}
-                                        {requireUsdark && !enoughUsdark && <p style={{ color: 'red' }}>Insufficient USDARK balance (need at least 2000 USDARK)</p>}
-                                        {!formComplete && <p style={{ color: 'red' }}>Please complete all required fields</p>}
-                                        {useVanityAddress && vanityStatus === 'failed' && <p style={{ color: 'red' }}>Vanity generation failed. Uncheck to use random address.</p>}
-                                    </form>
-                                </div>
-                                {/* Live Preview Panel */}
-                                <div className="preview-panel">
-                                    <div>
-                                        <h2 style={{ marginBottom: '20px', fontFamily: 'Orbitron', fontSize: '1.5em' }}>Live Preview</h2>
-                                        <div className="preview-content">
-                                            {imagePreview ? (
-                                                <img
-                                                    src={imagePreview}
-                                                    alt="Token preview"
-                                                    style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: '12px', marginBottom: '15px' }}
-                                                />
-                                            ) : (
-                                                <div className="preview-image-placeholder">
-                                                    Upload image to preview
-                                                </div>
-                                            )}
-                                            <h3 style={{ marginBottom: '10px', fontSize: '1.3em' }}>{tokenName || 'Token Name'} ({ticker || 'TICKER'})</h3>
-                                            <p style={{ color: '#ccc', marginBottom: '15px', fontSize: '0.9em' }}>{description || 'Enter a description for your token...'}</p>
-                                            <div className="preview-stats">
-                                                <div>
-                                                    <span>Total Supply</span>
-                                                    <span>1B</span>
-                                                </div>
-                                                <div>
-                                                    <span>Decimals</span>
-                                                    <span>{decimals}</span>
-                                                </div>
-                                                <div>
-                                                    <span>Migration Target</span>
-                                                    <span>40 SOL</span>
-                                                </div>
-                                            </div>
-                                            <div className="bonding-info">
-                                                <div>SOL Collected: 0 / 40</div>
-                                                <div>Progress: 0%</div>
-                                            </div>
-                                            <div className="progress-bar">
-                                                <div className="progress" style={{ width: '0%' }}></div>
-                                            </div>
-                                            <div className="preview-fee">
-                                                <div><DollarSign size={16} style={{ display: 'inline', marginRight: '5px' }} /> Launch Fee: 0.02 SOL (~$3 USD) {USDARK_BYPASS === 1 ? '+ 2000 USDARK (sent to fee wallet)' : ''}</div>
-                                                <div>Bonding Curve: Manual trading until 40 SOL</div>
-                                                {useVanityAddress && (
-                                                    <div>Vanity: ...DRK</div>
-                                                )}
-                                            </div>
-                                            <button className="preview-button" onClick={() => setShowLaunchInfoModal(true)}>View Launch Details</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <LaunchPage
+                                tokenName={tokenName}
+                                setTokenName={setTokenName}
+                                ticker={ticker}
+                                setTicker={setTicker}
+                                description={description}
+                                setDescription={setDescription}
+                                imageFile={imageFile}
+                                setImageFile={setImageFile}
+                                imagePreview={imagePreview}
+                                setImagePreview={setImagePreview}
+                                decimals={decimals}
+                                setDecimals={setDecimals}
+                                useVanityAddress={useVanityAddress}
+                                setUseVanityAddress={setUseVanityAddress}
+                                vanityStatus={vanityStatus}
+                                vanityProgress={vanityProgress}
+                                twitterUrl={twitterUrl}
+                                setTwitterUrl={setTwitterUrl}
+                                telegramUrl={telegramUrl}
+                                setTelegramUrl={setTelegramUrl}
+                                websiteUrl={websiteUrl}
+                                setWebsiteUrl={setWebsiteUrl}
+                                isSending={isSending}
+                                handleLaunchToken={handleLaunchToken}
+                                handleImageChange={handleImageChange}
+                                userSolBalance={userSolBalance}
+                                userUsdarkBalance={userUsdarkBalance}
+                                formComplete={formComplete}
+                                enoughSol={enoughSol}
+                                enoughUsdark={enoughUsdark}
+                                setShowLaunchInfoModal={setShowLaunchInfoModal}
+                            />
                         )}
                         {activePage === 'profile' && (
-                            <div className="profile-container">
-                                <div className="profile-header">
-                                    <h1>Creator Dashboard</h1>
-                                    <p>Manage your tokens and claim your trading fees</p>
-                                </div>
-                                {userTokens.length === 0 ? (
-                                    <div className="no-tokens profile-no-tokens">
-                                        <User size={48} className="mx-auto" />
-                                        <p>No tokens created yet</p>
-                                        <button className="create-coin" onClick={() => setActivePage('launch')}>
-                                            Launch Your First Token
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="user-tokens-list">
-                                        {userTokens.map((token) => (
-                                            <div key={token.id || token.mint} className="user-token-item">
-                                                <div className="user-token-info">
-                                                    <img
-                                                        src={token.image || 'https://via.placeholder.com/80?text=USDARK'}
-                                                        alt={token.name}
-                                                        className="user-token-image"
-                                                        onError={(e) => (e.target.src = 'https://via.placeholder.com/80?text=USDARK')}
-                                                    />
-                                                    <div className="user-token-details">
-                                                        <h3>{token.name} ({token.symbol})</h3>
-                                                        <p className="mint-address">{token.mint.substring(0, 8)}...{token.mint.slice(-8)}</p>
-                                                        <div className="user-token-stats">
-                                                            <span>SOL Collected: {token.solCollected.toFixed(2)}</span>
-                                                            {token.graduated && <span className="graduated-tag">Graduated</span>}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="user-token-fees">
-                                                    <div className="claimable-fee">
-                                                        <DollarSign size={16} />
-                                                        <span>{(claimableFees[token.mint] || 0).toFixed(4)} SOL</span>
-                                                        {/* <small>(60% of fees)</small> */}
-                                                    </div>
-                                                    <button
-                                                        className="claim-button"
-                                                        onClick={() => handleClaim(token)}
-                                                        disabled={isSending || (claimableFees[token.mint] || 0) <= 0}
-                                                    >
-                                                        {isSending ? <Loader2 className="animate-spin mr-2" size={16} /> : <DollarSign size={16} className="mr-2" />}
-                                                        {isSending ? 'Claiming...' : 'Claim Fees'}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <ProfilePage
+                                userTokens={userTokens}
+                                claimableFees={claimableFees}
+                                isSending={isSending}
+                                handleClaim={handleClaim}
+                                setActivePage={setActivePage}
+                            />
                         )}
                     </main>
                 </div>
@@ -1949,7 +1423,7 @@ function App() {
                             </div>
                             <button
                                 className="trade-button"
-                                onClick={handleTrade}
+                                onClick={handleInitialBuy}
                                 disabled={!initialBuyAmount || parseFloat(initialBuyAmount) <= 0 || isSending}
                                 style={{ marginBottom: '15px' }}
                             >
