@@ -13,7 +13,7 @@ import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import {
     DynamicBondingCurveClient,
     buildCurveWithMarketCap,
-    ActivationType, 
+    ActivationType,
     CollectFeeMode,
     BaseFeeMode,
     MigrationFeeOption,
@@ -23,17 +23,14 @@ import {
     TokenUpdateAuthorityOption
 } from '@meteora-ag/dynamic-bonding-curve-sdk';
 import BN from 'bn.js';
-
 import HomePage from './pages/HomePage';
 import LaunchPage from './pages/LaunchPage';
 import ProfilePage from './pages/ProfilePage';
 import { firebaseConfig, DEFAULT_NETWORK, NETWORKS, FEE_WALLET, BASE_FEE, USDARK_MINT, USDARK_DECIMALS, LAUNCH_FEE_USDARK, USDARK_BYPASS, MIGRATION_TARGET_SOL, TOTAL_SUPPLY_TOKENS, BONDING_SUPPLY_TOKENS, DEX_SUPPLY_TOKENS, DBC_PROGRAM_ID, VIRTUAL_SOL_LAMPORTS, VIRTUAL_TOKENS_BASE } from './constants';
 import { uploadToIPFS, timeoutPromise, safeGetOrCreateATA, calculateTokensOut, calculateSolOut, fetchHoldersCount, fetchTokenMetrics, timeAgo, confirmSignature, generateVanityKeypair } from './utils';
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-
 function App() {
     const [network, setNetwork] = useState(DEFAULT_NETWORK);
     const [solanaConnection, setSolanaConnection] = useState(null);
@@ -124,6 +121,15 @@ function App() {
         });
         return () => unsubscribe();
     }, []);
+    useEffect(() => {
+        const savedPage = localStorage.getItem('activePage');
+        if (savedPage && ['home', 'launch', 'profile'].includes(savedPage)) {
+            setActivePage(savedPage);
+        }
+    }, []);
+    useEffect(() => {
+        localStorage.setItem('activePage', activePage);
+    }, [activePage]);
     useEffect(() => {
         if (!firebaseUser) return;
         setIsLoadingTokens(true);
@@ -960,7 +966,7 @@ function App() {
         }
         return accounts[0].pubkey.toBase58();
       };
-   
+  
       const handleFixPool = async (token) => {
         setIsSending(true);
         setStatus('Fetching correct pool...');
